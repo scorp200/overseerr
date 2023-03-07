@@ -86,6 +86,18 @@ class AvailabilitySync {
               ratingKey: null,
               ratingKey4k: null,
             });
+              await mediaRepository.update(media.id, {
+                status: MediaStatus.DELETED,
+                status4k: MediaStatus.DELETED,
+                serviceId: null,
+                serviceId4k: null,
+                externalServiceId: null,
+                externalServiceId4k: null,
+                externalServiceSlug: null,
+                externalServiceSlug4k: null,
+                ratingKey: null,
+                ratingKey4k: null,
+              });
 
             await requestRepository.update(
               { id: In(request) },
@@ -93,6 +105,12 @@ class AvailabilitySync {
             );
           }
         }
+              await requestRepository.update(
+                { id: In(request) },
+                { status: MediaRequestStatus.COMPLETED }
+              );
+            }
+          }
 
         if (media.mediaType === 'tv') {
           // ok, the show itself exists, but do all it's seasons?
@@ -127,6 +145,22 @@ class AvailabilitySync {
               );
             } else {
               const seasonExists = await this.seasonExists(media, season);
+            let didDeleteSeasons = false;
+            for (const season of seasons) {
+              if (
+                !mediaExists &&
+                (season.status !== MediaStatus.DELETED ||
+                  season.status4k !== MediaStatus.DELETED)
+              ) {
+                await seasonRepository.update(
+                  { id: season.id },
+                  {
+                    status: MediaStatus.DELETED,
+                    status4k: MediaStatus.DELETED,
+                  }
+                );
+              } else {
+                const seasonExists = await this.seasonExists(media, season);
 
               if (!seasonExists) {
                 logger.info(
@@ -146,6 +180,18 @@ class AvailabilitySync {
                     }
                   );
                 }
+                  if (
+                    season.status !== MediaStatus.DELETED ||
+                    season.status4k !== MediaStatus.DELETED
+                  ) {
+                    await seasonRepository.update(
+                      { id: season.id },
+                      {
+                        status: MediaStatus.DELETED,
+                        status4k: MediaStatus.DELETED,
+                      }
+                    );
+                  }
 
                 const seasonToBeDeleted = await seasonRequestRepository.findOne(
                   {
@@ -170,6 +216,11 @@ class AvailabilitySync {
                     status: MediaRequestStatus.COMPLETED,
                   });
                 }
+                  if (seasonToBeDeleted) {
+                    await seasonRequestRepository.update(seasonToBeDeleted.id, {
+                      status: MediaRequestStatus.COMPLETED,
+                    });
+                  }
 
                 didDeleteSeasons = true;
               }
