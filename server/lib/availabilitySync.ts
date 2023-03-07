@@ -4,7 +4,7 @@ import type { RadarrMovie } from '@server/api/servarr/radarr';
 import RadarrAPI from '@server/api/servarr/radarr';
 import type { SonarrSeason, SonarrSeries } from '@server/api/servarr/sonarr';
 import SonarrAPI from '@server/api/servarr/sonarr';
-import { MediaStatus } from '@server/constants/media';
+import { MediaRequestStatus, MediaStatus } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
 import MediaRequest from '@server/entity/MediaRequest';
@@ -14,6 +14,7 @@ import { User } from '@server/entity/User';
 import type { RadarrSettings, SonarrSettings } from '@server/lib/settings';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
+import { In } from 'typeorm';
 
 class AvailabilitySync {
   public running = false;
@@ -55,11 +56,11 @@ class AvailabilitySync {
 
         const mediaExists = await this.mediaExists(media);
 
-        // We can not delete media so if both versions do not exist, we will change both columns to unknown or null
+        // We can not delete media so if both versions do not exist, we will change both columns to deleted or null
         if (!mediaExists) {
           if (
-            media.status !== MediaStatus.UNKNOWN ||
-            media.status4k !== MediaStatus.UNKNOWN
+            media.status !== MediaStatus.DELETED ||
+            media.status4k !== MediaStatus.DELETED
           ) {
             const request = await requestRepository.find({
               relations: {
@@ -69,13 +70,13 @@ class AvailabilitySync {
             });
 
             logger.info(
-              `Media ID ${media.id} does not exist in any of your media instances. Status will be changed to unknown.`,
+              `Media ID ${media.id} does not exist in any of your media instances. Status will be changed to deleted.`,
               { label: 'AvailabilitySync' }
             );
 
             await mediaRepository.update(media.id, {
-              status: MediaStatus.UNKNOWN,
-              status4k: MediaStatus.UNKNOWN,
+              status: MediaStatus.DELETED,
+              status4k: MediaStatus.DELETED,
               serviceId: null,
               serviceId4k: null,
               externalServiceId: null,
@@ -86,7 +87,10 @@ class AvailabilitySync {
               ratingKey4k: null,
             });
 
-            await requestRepository.remove(request);
+            await requestRepository.update(
+              { id: In(request) },
+              { status: MediaRequestStatus.COMPLETED }
+            );
           }
         }
 
@@ -111,14 +115,14 @@ class AvailabilitySync {
           for (const season of seasons) {
             if (
               !mediaExists &&
-              (season.status !== MediaStatus.UNKNOWN ||
-                season.status4k !== MediaStatus.UNKNOWN)
+              (season.status !== MediaStatus.DELETED ||
+                season.status4k !== MediaStatus.DELETED)
             ) {
               await seasonRepository.update(
                 { id: season.id },
                 {
-                  status: MediaStatus.UNKNOWN,
-                  status4k: MediaStatus.UNKNOWN,
+                  status: MediaStatus.DELETED,
+                  status4k: MediaStatus.DELETED,
                 }
               );
             } else {
@@ -131,14 +135,14 @@ class AvailabilitySync {
                 );
 
                 if (
-                  season.status !== MediaStatus.UNKNOWN ||
-                  season.status4k !== MediaStatus.UNKNOWN
+                  season.status !== MediaStatus.DELETED ||
+                  season.status4k !== MediaStatus.DELETED
                 ) {
                   await seasonRepository.update(
                     { id: season.id },
                     {
-                      status: MediaStatus.UNKNOWN,
-                      status4k: MediaStatus.UNKNOWN,
+                      status: MediaStatus.DELETED,
+                      status4k: MediaStatus.DELETED,
                     }
                   );
                 }
@@ -162,7 +166,9 @@ class AvailabilitySync {
                 );
 
                 if (seasonToBeDeleted) {
-                  await seasonRequestRepository.remove(seasonToBeDeleted);
+                  await seasonRequestRepository.update(seasonToBeDeleted.id, {
+                    status: MediaRequestStatus.COMPLETED,
+                  });
                 }
 
                 didDeleteSeasons = true;
@@ -253,7 +259,7 @@ class AvailabilitySync {
           is4k ? '4k' : 'non-4k'
         } ${
           isTVType ? 'Sonarr' : 'Radarr'
-        } and Plex instance. Status will be changed to unknown.`,
+        } and Plex instance. Status will be changed to deleted.`,
         { label: 'AvailabilitySync' }
       );
 
@@ -261,14 +267,14 @@ class AvailabilitySync {
         media.id,
         is4k
           ? {
-              status4k: MediaStatus.UNKNOWN,
+              status4k: MediaStatus.DELETED,
               serviceId4k: null,
               externalServiceId4k: null,
               externalServiceSlug4k: null,
               ratingKey4k: null,
             }
           : {
-              status: MediaStatus.UNKNOWN,
+              status: MediaStatus.DELETED,
               serviceId: null,
               externalServiceId: null,
               externalServiceSlug: null,
@@ -282,8 +288,8 @@ class AvailabilitySync {
         await seasonRepository?.update(
           { media: { id: media.id } },
           is4k
-            ? { status4k: MediaStatus.UNKNOWN }
-            : { status: MediaStatus.UNKNOWN }
+            ? { status4k: MediaStatus.DELETED }
+            : { status: MediaStatus.DELETED }
         );
       }
 
@@ -357,7 +363,7 @@ class AvailabilitySync {
       (existsInRadarr4k || existsInPlex4k) &&
       !existsInPlex
     ) {
-      if (media.status !== MediaStatus.UNKNOWN) {
+      if (media.status !== MediaStatus.DELETED) {
         this.mediaUpdater(media, false);
       }
     }
@@ -367,7 +373,7 @@ class AvailabilitySync {
       !existsInRadarr4k &&
       !existsInPlex4k
     ) {
-      if (media.status4k !== MediaStatus.UNKNOWN) {
+      if (media.status4k !== MediaStatus.DELETED) {
         this.mediaUpdater(media, true);
       }
     }
@@ -445,7 +451,7 @@ class AvailabilitySync {
       (existsInSonarr4k || existsInPlex4k) &&
       !existsInPlex
     ) {
-      if (media.status !== MediaStatus.UNKNOWN) {
+      if (media.status !== MediaStatus.DELETED) {
         this.mediaUpdater(media, false);
       }
     }
@@ -455,7 +461,7 @@ class AvailabilitySync {
       !existsInSonarr4k &&
       !existsInPlex4k
     ) {
-      if (media.status4k !== MediaStatus.UNKNOWN) {
+      if (media.status4k !== MediaStatus.DELETED) {
         this.mediaUpdater(media, true);
       }
     }
@@ -567,24 +573,26 @@ class AvailabilitySync {
         },
       });
 
-      // If season does not exist, we will change status to unknown and delete related season request
-      // If parent media request is empty(all related seasons have been removed), parent is automatically deleted
+      // If season does not exist, we will change its status to deleted and then delete the related season request
+      // If parent media request is empty(all related seasons have been set to deleted), parent is automatically set to deleted
       if (
         !seasonExistsInSonarr &&
         (seasonExistsInSonarr4k || seasonExistsInPlex4k) &&
         !seasonExistsInPlex
       ) {
-        if (season.status !== MediaStatus.UNKNOWN) {
+        if (season.status !== MediaStatus.DELETED) {
           logger.info(
-            `Season ${season.seasonNumber}, media ID ${media.id} does not exist in your non-4k Sonarr and Plex instance. Status will be changed to unknown.`,
+            `Season ${season.seasonNumber}, media ID ${media.id} does not exist in your non-4k Sonarr and Plex instance. Status will be changed to deleted.`,
             { label: 'AvailabilitySync' }
           );
           await seasonRepository.update(season.id, {
-            status: MediaStatus.UNKNOWN,
+            status: MediaStatus.DELETED,
           });
 
           if (seasonToBeDeleted) {
-            await seasonRequestRepository.remove(seasonToBeDeleted);
+            await seasonRequestRepository.update(seasonToBeDeleted.id, {
+              status: MediaRequestStatus.COMPLETED,
+            });
           }
 
           if (media.status === MediaStatus.AVAILABLE) {
@@ -604,17 +612,19 @@ class AvailabilitySync {
         !seasonExistsInSonarr4k &&
         !seasonExistsInPlex4k
       ) {
-        if (season.status4k !== MediaStatus.UNKNOWN) {
+        if (season.status4k !== MediaStatus.DELETED) {
           logger.info(
-            `Season ${season.seasonNumber}, media ID ${media.id} does not exist in your 4k Sonarr and Plex instance. Status will be changed to unknown.`,
+            `Season ${season.seasonNumber}, media ID ${media.id} does not exist in your 4k Sonarr and Plex instance. Status will be changed to deleted.`,
             { label: 'AvailabilitySync' }
           );
           await seasonRepository.update(season.id, {
-            status4k: MediaStatus.UNKNOWN,
+            status4k: MediaStatus.DELETED,
           });
 
           if (seasonToBeDeleted) {
-            await seasonRequestRepository.remove(seasonToBeDeleted);
+            await seasonRequestRepository.update(seasonToBeDeleted.id, {
+              status: MediaRequestStatus.COMPLETED,
+            });
           }
 
           if (media.status4k === MediaStatus.AVAILABLE) {

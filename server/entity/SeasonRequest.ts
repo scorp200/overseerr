@@ -1,7 +1,7 @@
 import { MediaRequestStatus } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import {
-  AfterRemove,
+  AfterUpdate,
   Column,
   CreateDateColumn,
   Entity,
@@ -37,15 +37,23 @@ class SeasonRequest {
     Object.assign(this, init);
   }
 
-  @AfterRemove()
+  @AfterUpdate()
   public async handleRemoveParent(): Promise<void> {
     const mediaRequestRepository = getRepository(MediaRequest);
     const requestToBeDeleted = await mediaRequestRepository.findOneOrFail({
       where: { id: this.request.id },
     });
 
-    if (requestToBeDeleted.seasons.length === 0) {
-      await mediaRequestRepository.delete({ id: this.request.id });
+    const allSeasonsAreCompleted = requestToBeDeleted.seasons.filter(
+      (season) => {
+        return season.status === MediaRequestStatus.COMPLETED;
+      }
+    );
+
+    if (requestToBeDeleted.seasons.length === allSeasonsAreCompleted.length) {
+      await mediaRequestRepository.update(this.request.id, {
+        status: MediaRequestStatus.COMPLETED,
+      });
     }
   }
 }
