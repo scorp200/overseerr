@@ -1,8 +1,14 @@
 import TheMovieDb from '@server/api/themoviedb';
-import { MediaStatus, MediaType } from '@server/constants/media';
+import {
+  MediaRequestStatus,
+  MediaStatus,
+  MediaType,
+} from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
+import MediaRequest from '@server/entity/MediaRequest';
 import Season from '@server/entity/Season';
+import SeasonRequest from '@server/entity/SeasonRequest';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 import AsyncLock from '@server/utils/asyncLock';
@@ -89,6 +95,53 @@ class BaseScanner<T> {
     return existing;
   }
 
+  private async requestUpdater(mediaId: number, is4k: boolean) {
+    const requestRepository = getRepository(MediaRequest);
+
+    const request = await requestRepository.findOne({
+      relations: {
+        media: true,
+      },
+      where: { media: { id: mediaId }, is4k: is4k },
+    });
+
+    await requestRepository.update(
+      { media: { id: request?.id } },
+      { status: MediaRequestStatus.COMPLETED }
+    );
+  }
+
+  private async seasonRequestUpdater(
+    mediaId: number | undefined,
+    seasonNumber: number,
+    is4k: boolean
+  ) {
+    const seasonRequestRepository = getRepository(SeasonRequest);
+
+    const seasonToBeCompleted = await seasonRequestRepository.findOne({
+      relations: {
+        request: {
+          media: true,
+        },
+      },
+      where: {
+        request: {
+          is4k: is4k,
+          media: {
+            id: mediaId,
+          },
+        },
+        seasonNumber: seasonNumber,
+      },
+    });
+
+    if (seasonToBeCompleted) {
+      await seasonRequestRepository.update(seasonToBeCompleted?.id, {
+        status: MediaRequestStatus.COMPLETED,
+      });
+    }
+  }
+
   protected async processMovie(
     tmdbId: number,
     {
@@ -162,7 +215,16 @@ class BaseScanner<T> {
         }
 
         if (changedExisting) {
+          if (existing['status'] === MediaStatus.AVAILABLE) {
+            this.requestUpdater(existing.id, false);
+          }
+
+          if (existing['status4k'] === MediaStatus.AVAILABLE) {
+            this.requestUpdater(existing.id, true);
+          }
+
           await mediaRepository.save(existing);
+
           this.log(
             `Media for ${title} exists. Changes were detected and the title will be updated.`,
             'info'
@@ -203,6 +265,15 @@ class BaseScanner<T> {
           newMedia.ratingKey4k =
             is4k && this.enable4kMovie ? ratingKey : undefined;
         }
+
+        if (newMedia['status'] === MediaStatus.AVAILABLE) {
+          this.requestUpdater(newMedia.id, false);
+        }
+
+        if (newMedia['status4k'] === MediaStatus.AVAILABLE && existing) {
+          this.requestUpdater(newMedia.id, true);
+        }
+
         await mediaRepository.save(newMedia);
         this.log(`Saved new media: ${title}`);
       }
@@ -297,6 +368,14 @@ class BaseScanner<T> {
               : season.is4kOverride && season.processing
               ? MediaStatus.PROCESSING
               : existingSeason.status4k;
+
+          if (existingSeason['status'] === MediaStatus.AVAILABLE) {
+            this.seasonRequestUpdater(media?.id, season.seasonNumber, false);
+          }
+
+          if (existingSeason['status4k'] === MediaStatus.AVAILABLE) {
+            this.seasonRequestUpdater(media?.id, season.seasonNumber, true);
+          }
         } else {
           newSeasons.push(
             new Season({
@@ -321,6 +400,18 @@ class BaseScanner<T> {
                   : MediaStatus.UNKNOWN,
             })
           );
+
+          if (season.totalEpisodes === season.episodes && season.episodes > 0) {
+            this.seasonRequestUpdater(media?.id, season.seasonNumber, false);
+          }
+
+          if (
+            this.enable4kShow &&
+            season.totalEpisodes === season.episodes4k &&
+            season.episodes4k > 0
+          ) {
+            this.seasonRequestUpdater(media?.id, season.seasonNumber, true);
+          }
         }
       }
 
@@ -439,7 +530,16 @@ class BaseScanner<T> {
               )
             ? MediaStatus.PROCESSING
             : MediaStatus.UNKNOWN;
+
+        if (isAllStandardSeasons) {
+          this.requestUpdater(media.id, false);
+        }
+
+        if (isAll4kSeasons) {
+          this.requestUpdater(media.id, true);
+        }
         await mediaRepository.save(media);
+
         this.log(`Updating existing title: ${title}`);
       } else {
         const newMedia = new Media({
@@ -499,7 +599,16 @@ class BaseScanner<T> {
               ? MediaStatus.PROCESSING
               : MediaStatus.UNKNOWN,
         });
+
+        if (newMedia['status'] === MediaStatus.AVAILABLE) {
+          this.requestUpdater(newMedia.id, false);
+        }
+
+        if (newMedia['status4k'] === MediaStatus.AVAILABLE) {
+          this.requestUpdater(newMedia.id, true);
+        }
         await mediaRepository.save(newMedia);
+
         this.log(`Saved ${title}`);
       }
     });
