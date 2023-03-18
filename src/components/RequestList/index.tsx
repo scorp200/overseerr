@@ -100,6 +100,10 @@ const RequestList = () => {
     );
   }, [currentFilter, currentSort, currentPageSize]);
 
+  console.log({ currentFilter });
+
+  console.log({ data });
+
   if (!data && !error) {
     return <LoadingSpinner />;
   }
