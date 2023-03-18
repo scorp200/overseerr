@@ -34,6 +34,7 @@ enum Filter {
   AVAILABLE = 'available',
   UNAVAILABLE = 'unavailable',
   FAILED = 'failed',
+  DELETED = 'deleted',
 }
 
 type Sort = 'added' | 'modified';
@@ -98,6 +99,10 @@ const RequestList = () => {
       })
     );
   }, [currentFilter, currentSort, currentPageSize]);
+
+  console.log({ currentFilter });
+
+  console.log({ data });
 
   if (!data && !error) {
     return <LoadingSpinner />;
@@ -176,6 +181,9 @@ const RequestList = () => {
               </option>
               <option value="unavailable">
                 {intl.formatMessage(globalMessages.unavailable)}
+              </option>
+              <option value="deleted">
+                {intl.formatMessage(globalMessages.deleted)}
               </option>
             </select>
           </div>

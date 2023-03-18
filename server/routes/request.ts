@@ -55,12 +55,17 @@ requestRoutes.get<Record<string, unknown>, RequestResultsResponse>(
         case 'failed':
           statusFilter = [MediaRequestStatus.FAILED];
           break;
+        case 'completed':
+        case 'deleted':
+          statusFilter = [MediaRequestStatus.COMPLETED];
+          break;
         default:
           statusFilter = [
             MediaRequestStatus.PENDING,
             MediaRequestStatus.APPROVED,
             MediaRequestStatus.DECLINED,
             MediaRequestStatus.FAILED,
+            MediaRequestStatus.COMPLETED,
           ];
       }
 
@@ -79,6 +84,9 @@ requestRoutes.get<Record<string, unknown>, RequestResultsResponse>(
             MediaStatus.PARTIALLY_AVAILABLE,
           ];
           break;
+        case 'deleted':
+          mediaStatusFilter = [MediaStatus.DELETED];
+          break;
         default:
           mediaStatusFilter = [
             MediaStatus.UNKNOWN,
@@ -86,6 +94,7 @@ requestRoutes.get<Record<string, unknown>, RequestResultsResponse>(
             MediaStatus.PROCESSING,
             MediaStatus.PARTIALLY_AVAILABLE,
             MediaStatus.AVAILABLE,
+            MediaStatus.DELETED,
           ];
       }
 

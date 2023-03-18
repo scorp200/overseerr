@@ -21,6 +21,8 @@ const RecentRequestsSlider = () => {
     return null;
   }
 
+  console.log({ requests });
+
   return (
     <>
       <div className="slider-header">

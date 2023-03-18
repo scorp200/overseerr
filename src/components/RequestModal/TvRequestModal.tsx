@@ -569,7 +569,9 @@ const TvRequestModal = ({
                         (sn) =>
                           sn.seasonNumber === season.seasonNumber &&
                           sn[is4k ? 'status4k' : 'status'] !==
-                            MediaStatus.UNKNOWN
+                            MediaStatus.UNKNOWN &&
+                          sn[is4k ? 'status4k' : 'status'] !==
+                            MediaStatus.DELETED
                       );
                       return (
                         <tr key={`season-${season.id}`}>
