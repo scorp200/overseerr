@@ -78,7 +78,8 @@ const CollectionRequestModal = ({
             .filter(
               (request) =>
                 request.is4k === is4k &&
-                request.status !== MediaRequestStatus.DECLINED
+                request.status !== MediaRequestStatus.DECLINED &&
+                request.status !== MediaRequestStatus.COMPLETED
             )
             .map((part) => part.id),
         ];
@@ -167,7 +168,9 @@ const CollectionRequestModal = ({
 
     return (part?.mediaInfo?.requests ?? []).find(
       (request) =>
-        request.is4k === is4k && request.status !== MediaRequestStatus.DECLINED
+        request.is4k === is4k &&
+        request.status !== MediaRequestStatus.DECLINED &&
+        request.status !== MediaRequestStatus.COMPLETED
     );
   };
 
@@ -240,6 +243,9 @@ const CollectionRequestModal = ({
     ],
     { type: 'or' }
   );
+
+  console.log('getALL', getAllRequestedParts().includes(8011));
+  console.log('getPART', getPartRequest(8011));
 
   return (
     <Modal
@@ -342,7 +348,9 @@ const CollectionRequestModal = ({
                     const partMedia =
                       part.mediaInfo &&
                       part.mediaInfo[is4k ? 'status4k' : 'status'] !==
-                        MediaStatus.UNKNOWN
+                        MediaStatus.UNKNOWN &&
+                      part.mediaInfo[is4k ? 'status4k' : 'status'] !==
+                        MediaStatus.DELETED
                         ? part.mediaInfo
                         : undefined;
 

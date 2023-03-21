@@ -33,7 +33,9 @@ export class MediaSubscriber implements EntitySubscriberInterface<Media> {
               id: entity.id,
             },
             is4k,
-            status: Not(MediaRequestStatus.DECLINED),
+            status: Not(
+              MediaRequestStatus.DECLINED && MediaRequestStatus.COMPLETED
+            ),
           },
         });
 
@@ -116,7 +118,9 @@ export class MediaSubscriber implements EntitySubscriberInterface<Media> {
               id: entity.id,
             },
             is4k,
-            status: Not(MediaRequestStatus.DECLINED),
+            status: Not(
+              MediaRequestStatus.DECLINED && MediaRequestStatus.COMPLETED
+            ),
           },
         });
         const request = requests.find(
