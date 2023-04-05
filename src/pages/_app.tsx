@@ -11,6 +11,7 @@ import { LanguageContext } from '@app/context/LanguageContext';
 import { SettingsProvider } from '@app/context/SettingsContext';
 import { UserContext } from '@app/context/UserContext';
 import type { User } from '@app/hooks/useUser';
+import { Permission, useUser } from '@app/hooks/useUser';
 import '@app/styles/globals.css';
 import { polyfillIntl } from '@app/utils/polyfillIntl';
 import type { PublicSettingsResponse } from '@server/interfaces/api/settingsInterfaces';
@@ -112,6 +113,33 @@ const CoreApp: Omit<NextAppComponentType, 'origGetInitialProps'> = ({
   useEffect(() => {
     loadLocaleData(currentLocale).then(setMessages);
   }, [currentLocale]);
+
+  const requestsCount = async () => {
+    const response = await axios.get('/api/v1/request/count');
+
+    return response.data;
+  };
+
+  const { hasPermission } = useUser();
+
+  useEffect(() => {
+    //Set navigator to new variable with any type to prevent setAppBadge unknown error
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let newNavigator: any;
+
+    if ('setAppBadge' in navigator) {
+      newNavigator = navigator;
+    }
+
+    if (
+      !router.pathname.match(/(login|setup|resetpassword)/) &&
+      hasPermission(Permission.ADMIN)
+    ) {
+      requestsCount().then((data) => newNavigator.setAppBadge(data.pending));
+    } else {
+      newNavigator.clearAppBadge();
+    }
+  }, [hasPermission, router.pathname]);
 
   if (router.pathname.match(/(login|setup|resetpassword)/)) {
     component = <Component {...pageProps} />;
