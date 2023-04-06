@@ -1,6 +1,7 @@
 import { IssueType, IssueTypeName } from '@server/constants/issue';
-import { MediaType } from '@server/constants/media';
+import { MediaRequestStatus, MediaType } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
+import MediaRequest from '@server/entity/MediaRequest';
 import { User } from '@server/entity/User';
 import { UserPushSubscription } from '@server/entity/UserPushSubscription';
 import type { NotificationAgentConfig } from '@server/lib/settings';
@@ -156,6 +157,12 @@ class WebPushAgent
 
     const mainUser = await userRepository.findOne({ where: { id: 1 } });
 
+    const requestRepository = getRepository(MediaRequest);
+
+    const pendingRequests = await requestRepository.find({
+      where: { status: MediaRequestStatus.PENDING },
+    });
+
     const webPushNotification = async (
       pushSub: UserPushSubscription,
       notificationPayload: Buffer
@@ -212,7 +219,11 @@ class WebPushAgent
       pushSubs.push(...notifySubs);
     }
 
-    if (payload.notifyAdmin) {
+    if (
+      payload.notifyAdmin ||
+      type === Notification.MEDIA_APPROVED ||
+      type === Notification.MEDIA_DECLINED
+    ) {
       const users = await userRepository.find();
 
       const manageUsers = users.filter(
@@ -235,6 +246,8 @@ class WebPushAgent
         })
         .getMany();
 
+      //We only want to send the custom notification when type is approved or declined
+      //Otherwise, default to the normal notification
       if (
         type === Notification.MEDIA_APPROVED ||
         type === Notification.MEDIA_DECLINED
@@ -246,6 +259,7 @@ class WebPushAgent
             settings.vapidPrivate
           );
 
+          //Custom payload only for updating the app badge
           const notificationBadgePayload = Buffer.from(
             JSON.stringify(
               this.getNotificationPayload(type, {
@@ -253,7 +267,7 @@ class WebPushAgent
                 notifySystem: false,
                 notifyAdmin: true,
                 isAdmin: true,
-                pendingRequestsCount: payload.pendingRequestsCount,
+                pendingRequestsCount: pendingRequests.length,
               })
             ),
             'utf-8'
@@ -276,6 +290,10 @@ class WebPushAgent
         settings.vapidPublic,
         settings.vapidPrivate
       );
+
+      if (type === Notification.MEDIA_PENDING) {
+        payload = { ...payload, pendingRequestsCount: pendingRequests.length };
+      }
 
       const notificationPayload = Buffer.from(
         JSON.stringify(this.getNotificationPayload(type, payload)),

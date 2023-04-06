@@ -1095,12 +1095,6 @@ export class MediaRequest {
   private async sendNotification(media: Media, type: Notification) {
     const tmdb = new TheMovieDb();
 
-    const requestRepository = getRepository(MediaRequest);
-
-    const pendingRequests = await requestRepository.find({
-      where: { status: MediaRequestStatus.PENDING },
-    });
-
     try {
       const mediaType = this.type === MediaType.MOVIE ? 'Movie' : 'Series';
       let event: string | undefined;
@@ -1110,9 +1104,11 @@ export class MediaRequest {
       switch (type) {
         case Notification.MEDIA_APPROVED:
           event = `${this.is4k ? '4K ' : ''}${mediaType} Request Approved`;
+          notifyAdmin = false;
           break;
         case Notification.MEDIA_DECLINED:
           event = `${this.is4k ? '4K ' : ''}${mediaType} Request Declined`;
+          notifyAdmin = false;
           break;
         case Notification.MEDIA_PENDING:
           event = `New ${this.is4k ? '4K ' : ''}${mediaType} Request`;
@@ -1141,9 +1137,7 @@ export class MediaRequest {
           request: this,
           notifyAdmin,
           notifySystem,
-          notifyUser: Notification.MEDIA_AUTO_REQUESTED
-            ? this.requestedBy
-            : undefined,
+          notifyUser: notifyAdmin ? undefined : this.requestedBy,
           event,
           subject: `${movie.title}${
             movie.release_date ? ` (${movie.release_date.slice(0, 4)})` : ''
@@ -1154,7 +1148,6 @@ export class MediaRequest {
             omission: '…',
           }),
           image: `https://image.tmdb.org/t/p/w600_and_h900_bestv2${movie.poster_path}`,
-          pendingRequestsCount: pendingRequests.length,
         });
       } else if (this.type === MediaType.TV) {
         const tv = await tmdb.getTvShow({ tvId: media.tmdbId });
@@ -1182,7 +1175,6 @@ export class MediaRequest {
                 .join(', '),
             },
           ],
-          pendingRequestsCount: pendingRequests.length,
         });
       }
     } catch (e) {
