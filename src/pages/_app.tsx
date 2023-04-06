@@ -114,30 +114,27 @@ const CoreApp: Omit<NextAppComponentType, 'origGetInitialProps'> = ({
     loadLocaleData(currentLocale).then(setMessages);
   }, [currentLocale]);
 
-  const requestsCount = async () => {
-    const response = await axios.get('/api/v1/request/count');
-
-    return response.data;
-  };
-
   const { hasPermission } = useUser();
 
   useEffect(() => {
-    //Set navigator to new variable with any type to prevent setAppBadge unknown error
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let newNavigator: any;
+    const requestsCount = async () => {
+      const response = await axios.get('/api/v1/request/count');
+      return response.data;
+    };
+
+    //Set navigator to new variable with any type to prevent setAppBadge unknown error since it does actually exist on navigator
+    //eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const newNavigator: any = navigator;
 
     if ('setAppBadge' in navigator) {
-      newNavigator = navigator;
-    }
-
-    if (
-      !router.pathname.match(/(login|setup|resetpassword)/) &&
-      hasPermission(Permission.ADMIN)
-    ) {
-      requestsCount().then((data) => newNavigator.setAppBadge(data.pending));
-    } else {
-      newNavigator.clearAppBadge();
+      if (
+        !router.pathname.match(/(login|setup|resetpassword)/) &&
+        hasPermission(Permission.ADMIN)
+      ) {
+        requestsCount().then((data) => newNavigator.setAppBadge(data.pending));
+      } else {
+        newNavigator.clearAppBadge();
+      }
     }
   }, [hasPermission, router.pathname]);
 

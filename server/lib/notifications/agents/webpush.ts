@@ -156,6 +156,45 @@ class WebPushAgent
 
     const mainUser = await userRepository.findOne({ where: { id: 1 } });
 
+    const webPushNotification = async (
+      pushSub: UserPushSubscription,
+      notificationPayload: Buffer
+    ) => {
+      logger.debug('Sending web push notification', {
+        label: 'Notifications',
+        recipient: pushSub.user.displayName,
+        type: Notification[type],
+        subject: payload.subject,
+      });
+
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: pushSub.endpoint,
+            keys: {
+              auth: pushSub.auth,
+              p256dh: pushSub.p256dh,
+            },
+          },
+          notificationPayload
+        );
+      } catch (e) {
+        logger.error(
+          'Error sending web push notification; removing subscription',
+          {
+            label: 'Notifications',
+            recipient: pushSub.user.displayName,
+            type: Notification[type],
+            subject: payload.subject,
+            errorMessage: e.message,
+          }
+        );
+
+        // Failed to send notification so we need to remove the subscription
+        userPushSubRepository.remove(pushSub);
+      }
+    };
+
     if (
       payload.notifyUser &&
       // Check if user has webpush notifications enabled and fallback to true if undefined
@@ -196,97 +235,38 @@ class WebPushAgent
         })
         .getMany();
 
-      pushSubs.push(...allSubs);
-    }
+      if (
+        type === Notification.MEDIA_APPROVED ||
+        type === Notification.MEDIA_DECLINED
+      ) {
+        if (mainUser && allSubs.length > 0) {
+          webpush.setVapidDetails(
+            `mailto:${mainUser.email}`,
+            settings.vapidPublic,
+            settings.vapidPrivate
+          );
 
-    if (
-      type === Notification.MEDIA_APPROVED ||
-      type === Notification.MEDIA_DECLINED
-    ) {
-      const users = await userRepository.find();
-      const pushSubsForBadge: UserPushSubscription[] = [];
+          const notificationBadgePayload = Buffer.from(
+            JSON.stringify(
+              this.getNotificationPayload(type, {
+                subject: payload.subject,
+                notifySystem: false,
+                notifyAdmin: true,
+                isAdmin: true,
+                pendingRequestsCount: payload.pendingRequestsCount,
+              })
+            ),
+            'utf-8'
+          );
 
-      const manageUsers = users.filter(
-        (user) =>
-          // Check if user has webpush notifications enabled and fallback to true if undefined
-          // since web push should default to true
-          (user.settings?.hasNotificationType(
-            NotificationAgentKey.WEBPUSH,
-            type
-          ) ??
-            true) &&
-          shouldSendAdminNotification(type, user, payload)
-      );
-
-      const allSubs = await userPushSubRepository
-        .createQueryBuilder('pushSub')
-        .leftJoinAndSelect('pushSub.user', 'user')
-        .where('pushSub.userId IN (:users)', {
-          users: manageUsers
-            .filter((user) => user.id === 1)
-            .map((user) => user.id),
-        })
-        .getMany();
-
-      pushSubsForBadge.push(...allSubs);
-
-      if (mainUser && pushSubsForBadge.length > 0) {
-        webpush.setVapidDetails(
-          `mailto:${mainUser.email}`,
-          settings.vapidPublic,
-          settings.vapidPrivate
-        );
-
-        const notificationPayload = Buffer.from(
-          JSON.stringify(
-            this.getNotificationPayload(type, {
-              subject: 'Set PWA badge',
-              notifySystem: false,
-              notifyAdmin: true,
-              isAdmin: true,
-              pendingRequestsCount: payload.pendingRequestsCount,
+          await Promise.all(
+            allSubs.map(async (sub) => {
+              webPushNotification(sub, notificationBadgePayload);
             })
-          ),
-          'utf-8'
-        );
-
-        await Promise.all(
-          pushSubsForBadge.map(async (sub) => {
-            logger.debug('Sending web push notification for badge update', {
-              label: 'Notifications',
-              recipient: sub.user.displayName,
-              type: Notification[type],
-              subject: payload.subject,
-            });
-
-            try {
-              await webpush.sendNotification(
-                {
-                  endpoint: sub.endpoint,
-                  keys: {
-                    auth: sub.auth,
-                    p256dh: sub.p256dh,
-                  },
-                },
-                notificationPayload
-              );
-            } catch (e) {
-              logger.error(
-                'Error sending web push notification to update badge; removing subscription',
-                {
-                  label: 'Notifications',
-                  recipient: sub.user.displayName,
-                  type: Notification[type],
-                  subject: payload.subject,
-                  errorMessage: e.message,
-                }
-              );
-
-              // Failed to send notification so we need to remove the subscription
-              userPushSubRepository.remove(sub);
-            }
-          })
-        );
+          );
+        }
+      } else {
+        pushSubs.push(...allSubs);
       }
     }
 
@@ -304,39 +284,7 @@ class WebPushAgent
 
       await Promise.all(
         pushSubs.map(async (sub) => {
-          logger.debug('Sending web push notification', {
-            label: 'Notifications',
-            recipient: sub.user.displayName,
-            type: Notification[type],
-            subject: payload.subject,
-          });
-
-          try {
-            await webpush.sendNotification(
-              {
-                endpoint: sub.endpoint,
-                keys: {
-                  auth: sub.auth,
-                  p256dh: sub.p256dh,
-                },
-              },
-              notificationPayload
-            );
-          } catch (e) {
-            logger.error(
-              'Error sending web push notification; removing subscription',
-              {
-                label: 'Notifications',
-                recipient: sub.user.displayName,
-                type: Notification[type],
-                subject: payload.subject,
-                errorMessage: e.message,
-              }
-            );
-
-            // Failed to send notification so we need to remove the subscription
-            userPushSubRepository.remove(sub);
-          }
+          webPushNotification(sub, notificationPayload);
         })
       );
     }

@@ -1110,11 +1110,9 @@ export class MediaRequest {
       switch (type) {
         case Notification.MEDIA_APPROVED:
           event = `${this.is4k ? '4K ' : ''}${mediaType} Request Approved`;
-          notifyAdmin = false;
           break;
         case Notification.MEDIA_DECLINED:
           event = `${this.is4k ? '4K ' : ''}${mediaType} Request Declined`;
-          notifyAdmin = false;
           break;
         case Notification.MEDIA_PENDING:
           event = `New ${this.is4k ? '4K ' : ''}${mediaType} Request`;
@@ -1143,7 +1141,9 @@ export class MediaRequest {
           request: this,
           notifyAdmin,
           notifySystem,
-          notifyUser: notifyAdmin ? undefined : this.requestedBy,
+          notifyUser: Notification.MEDIA_AUTO_REQUESTED
+            ? this.requestedBy
+            : undefined,
           event,
           subject: `${movie.title}${
             movie.release_date ? ` (${movie.release_date.slice(0, 4)})` : ''
