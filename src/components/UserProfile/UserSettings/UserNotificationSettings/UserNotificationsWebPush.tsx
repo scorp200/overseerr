@@ -7,6 +7,10 @@ import useSettings from '@app/hooks/useSettings';
 import { useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
 import { ArrowDownOnSquareIcon } from '@heroicons/react/24/outline';
+import {
+  CloudArrowDownIcon,
+  CloudArrowUpIcon,
+} from '@heroicons/react/24/solid';
 import type { UserSettingsNotificationsResponse } from '@server/interfaces/api/userSettingsInterfaces';
 import axios from 'axios';
 import { Form, Formik } from 'formik';
@@ -19,6 +23,8 @@ import useSWR, { mutate } from 'swr';
 const messages = defineMessages({
   webpushsettingssaved: 'Web push notification settings saved successfully!',
   webpushsettingsfailed: 'Web push notification settings failed to save.',
+  enablewebpush: 'Enable web push',
+  disablewebpush: 'Disable web push',
 });
 
 const UserWebPushSettings = () => {
@@ -27,6 +33,7 @@ const UserWebPushSettings = () => {
   const router = useRouter();
   const { user } = useUser({ id: Number(router.query.userId) });
   const { currentSettings } = useSettings();
+  const [webPushEnabled, setWebPushEnabled] = useState(false);
   const {
     data,
     error,
@@ -34,8 +41,9 @@ const UserWebPushSettings = () => {
   } = useSWR<UserSettingsNotificationsResponse>(
     user ? `/api/v1/user/${user?.id}/settings/notifications` : null
   );
-  const [webPushEnabled, setWebPushEnabled] = useState(false);
 
+  // Subscribes to the push manager
+  // Will only add to the database if subscribing for the first time
   const enablePushNotifications = () => {
     if ('serviceWorker' in navigator && user?.id) {
       navigator.serviceWorker
@@ -67,6 +75,7 @@ const UserWebPushSettings = () => {
           }
         })
         .catch(function (error) {
+          // eslint-disable-next-line no-console
           console.log(
             '[SW] Failure subscribing to push manager, error:',
             error
@@ -75,6 +84,7 @@ const UserWebPushSettings = () => {
     }
   };
 
+  // Unsubscribes to the push manager
   const disablePushNotifications = () => {
     if ('serviceWorker' in navigator && user?.id) {
       navigator.serviceWorker.getRegistration('/sw.js').then((registration) => {
@@ -85,6 +95,7 @@ const UserWebPushSettings = () => {
               ?.unsubscribe()
               .then(() => setWebPushEnabled(false))
               .catch(function (error) {
+                // eslint-disable-next-line no-console
                 console.log(
                   '[SW] Failure unsubscribing to push manager, error:',
                   error
@@ -95,6 +106,8 @@ const UserWebPushSettings = () => {
     }
   };
 
+  // Checks our current subscription on page load
+  // Will set the web push state to true if subscribed
   useEffect(() => {
     if ('serviceWorker' in navigator && user?.id) {
       navigator.serviceWorker
@@ -105,6 +118,13 @@ const UserWebPushSettings = () => {
               setWebPushEnabled(true);
             }
           });
+        })
+        .catch(function (error) {
+          // eslint-disable-next-line no-console
+          console.log(
+            '[SW] Failure retrieving push manager subscription, error:',
+            error
+          );
         });
     }
   }, [user?.id]);
@@ -158,64 +178,63 @@ const UserWebPushSettings = () => {
         setFieldTouched,
       }) => {
         return (
-          <>
-            {webPushEnabled ? (
-              <Form className="section">
-                <NotificationTypeSelector
-                  user={user}
-                  currentTypes={values.types}
-                  onUpdate={(newTypes) => {
-                    setFieldValue('types', newTypes);
-                    setFieldTouched('types');
-                  }}
-                  error={
-                    errors.types && touched.types
-                      ? (errors.types as string)
-                      : undefined
-                  }
-                />
-                <div className="actions">
-                  <div className="flex justify-end">
-                    <span className="ml-3 inline-flex rounded-md shadow-sm">
-                      <Button
-                        buttonType="primary"
-                        type="submit"
-                        disabled={isSubmitting || !isValid}
-                      >
-                        <ArrowDownOnSquareIcon />
-                        <span>
-                          {isSubmitting
-                            ? intl.formatMessage(globalMessages.saving)
-                            : intl.formatMessage(globalMessages.save)}
-                        </span>
-                      </Button>
-                    </span>
-                  </div>
-                </div>
-              </Form>
-            ) : (
-              <div className="actions">
-                <div className="flex justify-end">
-                  <span className="ml-3 inline-flex rounded-md shadow-sm">
-                    <Button
-                      buttonType="primary"
-                      onClick={() => enablePushNotifications()}
-                    >
-                      <ArrowDownOnSquareIcon />
-                      <span>Enable Web Push</span>
-                    </Button>
-                  </span>
-                </div>
-              </div>
+          <Form className="section">
+            {webPushEnabled && (
+              <NotificationTypeSelector
+                user={user}
+                currentTypes={values.types}
+                onUpdate={(newTypes) => {
+                  setFieldValue('types', newTypes);
+                  setFieldTouched('types');
+                }}
+                error={
+                  errors.types && touched.types
+                    ? (errors.types as string)
+                    : undefined
+                }
+              />
             )}
-            <Button
-              buttonType="primary"
-              onClick={() => disablePushNotifications()}
-            >
-              <ArrowDownOnSquareIcon />
-              <span>Disable Web Push</span>
-            </Button>
-          </>
+            <div className="actions">
+              <div className="flex justify-end">
+                <span className="ml-3 inline-flex rounded-md shadow-sm">
+                  <Button
+                    buttonType={`${webPushEnabled ? 'danger' : 'warning'}`}
+                    type="button"
+                    onClick={() =>
+                      webPushEnabled
+                        ? disablePushNotifications()
+                        : enablePushNotifications()
+                    }
+                  >
+                    {webPushEnabled ? (
+                      <CloudArrowDownIcon />
+                    ) : (
+                      <CloudArrowUpIcon />
+                    )}
+                    <span>
+                      {webPushEnabled
+                        ? intl.formatMessage(messages.disablewebpush)
+                        : intl.formatMessage(messages.enablewebpush)}
+                    </span>
+                  </Button>
+                </span>
+                <span className="ml-3 inline-flex rounded-md shadow-sm">
+                  <Button
+                    buttonType="primary"
+                    type="submit"
+                    disabled={isSubmitting || !isValid}
+                  >
+                    <ArrowDownOnSquareIcon />
+                    <span>
+                      {isSubmitting
+                        ? intl.formatMessage(globalMessages.saving)
+                        : intl.formatMessage(globalMessages.save)}
+                    </span>
+                  </Button>
+                </span>
+              </div>
+            </div>
+          </Form>
         );
       }}
     </Formik>

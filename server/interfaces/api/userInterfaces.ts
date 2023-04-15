@@ -1,7 +1,6 @@
 import type Media from '@server/entity/Media';
 import type { MediaRequest } from '@server/entity/MediaRequest';
 import type { User } from '@server/entity/User';
-import type { UserPushSubscription } from '@server/entity/UserPushSubscription';
 import type { PaginatedResponse } from './common';
 
 export interface UserResultsResponse extends PaginatedResponse {
@@ -28,8 +27,4 @@ export interface QuotaResponse {
 export interface UserWatchDataResponse {
   recentlyWatched: Media[];
   playCount: number;
-}
-
-export interface UserPushSubscriptionResponse {
-  result: UserPushSubscription;
 }

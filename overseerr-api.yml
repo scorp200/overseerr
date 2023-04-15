@@ -3652,34 +3652,6 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/MediaRequest'
-
-  /user/{userId}/pushSubscription:
-    get:
-      summary: Get web push notification settings for a user
-      description: |
-        Returns web push notification settings for a user in a JSON object.
-      tags:
-        - users
-      parameters:
-        - in: path
-          name: userId
-          required: true
-          schema:
-            type: number
-      responses:
-        '200':
-          description: User web push notification settings in JSON
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  endpoint:
-                    type: string
-                  p256dh:
-                    type: string
-                  auth:
-                    type: string
   /user/{userId}/quota:
     get:
       summary: Get quotas for a specific user
