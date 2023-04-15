@@ -180,6 +180,30 @@ router.post<
   }
 });
 
+router.get<{ id: string }>('/:id/pushSubscription', async (req, res, next) => {
+  try {
+    const userPushSubRepository = getRepository(UserPushSubscription);
+
+    const userSubscription = await userPushSubRepository.findOneOrFail({
+      relations: {
+        user: true,
+      },
+      where: {
+        user: {
+          id: Number(req.params.id),
+        },
+      },
+    });
+
+    console.log({ id: Number(req.params.id), userSubscription });
+
+    return res.status(200).json(userSubscription);
+    // console.log('hello is this owrking');
+  } catch (e) {
+    next({ status: 404, message: 'User subscription not found.' });
+  }
+});
+
 router.get<{ id: string }>('/:id', async (req, res, next) => {
   try {
     const userRepository = getRepository(User);
