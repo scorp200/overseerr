@@ -138,6 +138,25 @@ router.post(
   }
 );
 
+router.get<{ key: string }>(
+  '/:key/pushSubscription',
+  async (req, res, next) => {
+    try {
+      const userPushSubRepository = getRepository(UserPushSubscription);
+
+      const userPushSub = await userPushSubRepository.findOneOrFail({
+        where: {
+          p256dh: req.params.key,
+        },
+      });
+
+      return res.status(200).json(userPushSub);
+    } catch (e) {
+      next({ status: 404, message: 'User subscription not found.' });
+    }
+  }
+);
+
 router.post<
   never,
   unknown,
@@ -179,6 +198,32 @@ router.post<
     next({ status: 500, message: 'Failed to register subscription.' });
   }
 });
+
+router.delete<{ key: string }>(
+  '/:key/pushSubscription',
+  async (req, res, next) => {
+    try {
+      const userPushSubRepository = getRepository(UserPushSubscription);
+
+      const userPushSub = await userPushSubRepository.findOneOrFail({
+        where: { p256dh: req.params.key },
+      });
+
+      await userPushSubRepository.remove(userPushSub);
+      return res.status(204).send();
+    } catch (e) {
+      logger.error('Something went wrong deleting the user push subcription', {
+        label: 'API',
+        key: req.params.key,
+        errorMessage: e.message,
+      });
+      return next({
+        status: 500,
+        message: 'User push subcription not found',
+      });
+    }
+  }
+);
 
 router.get<{ id: string }>('/:id', async (req, res, next) => {
   try {

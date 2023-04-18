@@ -11,6 +11,7 @@ import {
   CloudArrowDownIcon,
   CloudArrowUpIcon,
 } from '@heroicons/react/24/solid';
+import type { UserPushSubscription } from '@server/entity/UserPushSubscription';
 import type { UserSettingsNotificationsResponse } from '@server/interfaces/api/userSettingsInterfaces';
 import axios from 'axios';
 import { Form, Formik } from 'formik';
@@ -49,11 +50,6 @@ const UserWebPushSettings = () => {
       navigator.serviceWorker
         .getRegistration('/sw.js')
         .then(async (registration) => {
-          const permissionState =
-            await registration?.pushManager.permissionState({
-              userVisibleOnly: true,
-            });
-
           if (currentSettings.enablePushRegistration) {
             const sub = await registration?.pushManager.subscribe({
               userVisibleOnly: true,
@@ -63,13 +59,11 @@ const UserWebPushSettings = () => {
             const parsedSub = JSON.parse(JSON.stringify(sub));
 
             if (parsedSub.keys.p256dh && parsedSub.keys.auth) {
-              if (permissionState === 'prompt') {
-                await axios.post('/api/v1/user/registerPushSubscription', {
-                  endpoint: parsedSub.endpoint,
-                  p256dh: parsedSub.keys.p256dh,
-                  auth: parsedSub.keys.auth,
-                });
-              }
+              await axios.post('/api/v1/user/registerPushSubscription', {
+                endpoint: parsedSub.endpoint,
+                p256dh: parsedSub.keys.p256dh,
+                auth: parsedSub.keys.auth,
+              });
               setWebPushEnabled(true);
             }
           }
@@ -93,7 +87,13 @@ const UserWebPushSettings = () => {
           .then(async (subscription) => {
             subscription
               ?.unsubscribe()
-              .then(() => setWebPushEnabled(false))
+              .then(async () => {
+                const parsedSub = JSON.parse(JSON.stringify(subscription));
+                await axios.delete(
+                  `/api/v1/user/${parsedSub.keys.p256dh}/pushSubscription`
+                );
+                setWebPushEnabled(false);
+              })
               .catch(function (error) {
                 // eslint-disable-next-line no-console
                 console.log(
@@ -113,11 +113,22 @@ const UserWebPushSettings = () => {
       navigator.serviceWorker
         .getRegistration('/sw.js')
         .then(async (registration) => {
-          await registration?.pushManager.getSubscription().then((status) => {
-            if (status) {
-              setWebPushEnabled(true);
-            }
-          });
+          await registration?.pushManager
+            .getSubscription()
+            .then(async (subscription) => {
+              if (subscription) {
+                const parsedKey = JSON.parse(JSON.stringify(subscription));
+                const currentUserPushSub =
+                  await axios.get<UserPushSubscription>(
+                    `/api/v1/user/${parsedKey.keys.p256dh}/pushSubscription`
+                  );
+
+                if (currentUserPushSub.data.p256dh !== parsedKey.keys.p256dh) {
+                  return;
+                }
+                setWebPushEnabled(true);
+              }
+            });
         })
         .catch(function (error) {
           // eslint-disable-next-line no-console
@@ -198,7 +209,7 @@ const UserWebPushSettings = () => {
               <div className="flex justify-end">
                 <span className="ml-3 inline-flex rounded-md shadow-sm">
                   <Button
-                    buttonType={`${webPushEnabled ? 'danger' : 'warning'}`}
+                    buttonType={`${webPushEnabled ? 'danger' : 'primary'}`}
                     type="button"
                     onClick={() =>
                       webPushEnabled
@@ -218,20 +229,22 @@ const UserWebPushSettings = () => {
                     </span>
                   </Button>
                 </span>
-                <span className="ml-3 inline-flex rounded-md shadow-sm">
-                  <Button
-                    buttonType="primary"
-                    type="submit"
-                    disabled={isSubmitting || !isValid}
-                  >
-                    <ArrowDownOnSquareIcon />
-                    <span>
-                      {isSubmitting
-                        ? intl.formatMessage(globalMessages.saving)
-                        : intl.formatMessage(globalMessages.save)}
-                    </span>
-                  </Button>
-                </span>
+                {webPushEnabled && (
+                  <span className="ml-3 inline-flex rounded-md shadow-sm">
+                    <Button
+                      buttonType="primary"
+                      type="submit"
+                      disabled={isSubmitting || !isValid}
+                    >
+                      <ArrowDownOnSquareIcon />
+                      <span>
+                        {isSubmitting
+                          ? intl.formatMessage(globalMessages.saving)
+                          : intl.formatMessage(globalMessages.save)}
+                      </span>
+                    </Button>
+                  </span>
+                )}
               </div>
             </div>
           </Form>
