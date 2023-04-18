@@ -190,21 +190,19 @@ const UserWebPushSettings = () => {
       }) => {
         return (
           <Form className="section">
-            {webPushEnabled && (
-              <NotificationTypeSelector
-                user={user}
-                currentTypes={values.types}
-                onUpdate={(newTypes) => {
-                  setFieldValue('types', newTypes);
-                  setFieldTouched('types');
-                }}
-                error={
-                  errors.types && touched.types
-                    ? (errors.types as string)
-                    : undefined
-                }
-              />
-            )}
+            <NotificationTypeSelector
+              user={user}
+              currentTypes={values.types}
+              onUpdate={(newTypes) => {
+                setFieldValue('types', newTypes);
+                setFieldTouched('types');
+              }}
+              error={
+                errors.types && touched.types
+                  ? (errors.types as string)
+                  : undefined
+              }
+            />
             <div className="actions">
               <div className="flex justify-end">
                 <span className="ml-3 inline-flex rounded-md shadow-sm">
@@ -229,22 +227,20 @@ const UserWebPushSettings = () => {
                     </span>
                   </Button>
                 </span>
-                {webPushEnabled && (
-                  <span className="ml-3 inline-flex rounded-md shadow-sm">
-                    <Button
-                      buttonType="primary"
-                      type="submit"
-                      disabled={isSubmitting || !isValid}
-                    >
-                      <ArrowDownOnSquareIcon />
-                      <span>
-                        {isSubmitting
-                          ? intl.formatMessage(globalMessages.saving)
-                          : intl.formatMessage(globalMessages.save)}
-                      </span>
-                    </Button>
-                  </span>
-                )}
+                <span className="ml-3 inline-flex rounded-md shadow-sm">
+                  <Button
+                    buttonType="primary"
+                    type="submit"
+                    disabled={isSubmitting || !isValid}
+                  >
+                    <ArrowDownOnSquareIcon />
+                    <span>
+                      {isSubmitting
+                        ? intl.formatMessage(globalMessages.saving)
+                        : intl.formatMessage(globalMessages.save)}
+                    </span>
+                  </Button>
+                </span>
               </div>
             </div>
           </Form>
