@@ -90,7 +90,7 @@ const UserWebPushSettings = () => {
               .then(async () => {
                 const parsedSub = JSON.parse(JSON.stringify(subscription));
                 await axios.delete(
-                  `/api/v1/user/${parsedSub.keys.p256dh}/pushSubscription`
+                  `/api/v1/user/${user.id}/pushSubscription/${parsedSub.keys.p256dh}`
                 );
                 setWebPushEnabled(false);
               })
@@ -120,7 +120,7 @@ const UserWebPushSettings = () => {
                 const parsedKey = JSON.parse(JSON.stringify(subscription));
                 const currentUserPushSub =
                   await axios.get<UserPushSubscription>(
-                    `/api/v1/user/${parsedKey.keys.p256dh}/pushSubscription`
+                    `/api/v1/user/${user.id}/pushSubscription/${parsedKey.keys.p256dh}`
                   );
 
                 if (currentUserPushSub.data.p256dh !== parsedKey.keys.p256dh) {

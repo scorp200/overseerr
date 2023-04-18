@@ -39,33 +39,10 @@ const UserDropdown = () => {
   const { user, revalidate } = useUser();
 
   const logout = async () => {
-    if ('serviceWorker' in navigator && user?.id) {
-      navigator.serviceWorker.getRegistration('/sw.js').then((registration) => {
-        registration?.pushManager
-          .getSubscription()
-          .then(async (subscription) => {
-            subscription
-              ?.unsubscribe()
-              .then(async () => {
-                const parsedSub = JSON.parse(JSON.stringify(subscription));
-                await axios.delete(
-                  `/api/v1/user/${parsedSub.keys.p256dh}/pushSubscription`
-                );
-                const response = await axios.post('/api/v1/auth/logout');
+    const response = await axios.post('/api/v1/auth/logout');
 
-                if (response.data?.status === 'ok') {
-                  revalidate();
-                }
-              })
-              .catch(function (error) {
-                // eslint-disable-next-line no-console
-                console.log(
-                  '[SW] Failure unsubscribing to push manager, error:',
-                  error
-                );
-              });
-          });
-      });
+    if (response.data?.status === 'ok') {
+      revalidate();
     }
   };
 

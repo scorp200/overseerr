@@ -3548,7 +3548,7 @@ paths:
       responses:
         '204':
           description: Successfully registered push subscription
-  /user/{key}/pushSubscription:
+  /user/{userId}/pushSubscription/{key}:
     get:
       summary: Get web push notification settings for a user
       description: |
@@ -3556,6 +3556,11 @@ paths:
       tags:
         - users
       parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: number
         - in: path
           name: key
           required: true
@@ -3581,6 +3586,11 @@ paths:
       tags:
         - users
       parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: number
         - in: path
           name: key
           required: true

@@ -138,25 +138,6 @@ router.post(
   }
 );
 
-router.get<{ key: string }>(
-  '/:key/pushSubscription',
-  async (req, res, next) => {
-    try {
-      const userPushSubRepository = getRepository(UserPushSubscription);
-
-      const userPushSub = await userPushSubRepository.findOneOrFail({
-        where: {
-          p256dh: req.params.key,
-        },
-      });
-
-      return res.status(200).json(userPushSub);
-    } catch (e) {
-      next({ status: 404, message: 'User subscription not found.' });
-    }
-  }
-);
-
 router.post<
   never,
   unknown,
@@ -199,14 +180,43 @@ router.post<
   }
 });
 
-router.delete<{ key: string }>(
-  '/:key/pushSubscription',
+router.get<{ userId: number; key: string }>(
+  '/:userId/pushSubscription/:key',
   async (req, res, next) => {
     try {
       const userPushSubRepository = getRepository(UserPushSubscription);
 
       const userPushSub = await userPushSubRepository.findOneOrFail({
-        where: { p256dh: req.params.key },
+        relations: {
+          user: true,
+        },
+        where: {
+          user: { id: req.params.userId },
+          p256dh: req.params.key,
+        },
+      });
+
+      return res.status(200).json(userPushSub);
+    } catch (e) {
+      next({ status: 404, message: 'User subscription not found.' });
+    }
+  }
+);
+
+router.delete<{ userId: number; key: string }>(
+  '/:userId/pushSubscription/:key',
+  async (req, res, next) => {
+    try {
+      const userPushSubRepository = getRepository(UserPushSubscription);
+
+      const userPushSub = await userPushSubRepository.findOneOrFail({
+        relations: {
+          user: true,
+        },
+        where: {
+          user: { id: req.params.userId },
+          p256dh: req.params.key,
+        },
       });
 
       await userPushSubRepository.remove(userPushSub);
