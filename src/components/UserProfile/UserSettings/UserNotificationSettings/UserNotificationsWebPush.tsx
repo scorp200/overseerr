@@ -1,5 +1,7 @@
+import Alert from '@app/components/Common/Alert';
 import Button from '@app/components/Common/Button';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
+import Table from '@app/components/Common/Table';
 import NotificationTypeSelector, {
   ALL_NOTIFICATIONS,
 } from '@app/components/NotificationTypeSelector';
@@ -10,6 +12,9 @@ import { ArrowDownOnSquareIcon } from '@heroicons/react/24/outline';
 import {
   CloudArrowDownIcon,
   CloudArrowUpIcon,
+  ComputerDesktopIcon,
+  DevicePhoneMobileIcon,
+  TrashIcon,
 } from '@heroicons/react/24/solid';
 import type { UserPushSubscription } from '@server/entity/UserPushSubscription';
 import type { UserSettingsNotificationsResponse } from '@server/interfaces/api/userSettingsInterfaces';
@@ -20,12 +25,25 @@ import { useEffect, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 import { useToasts } from 'react-toast-notifications';
 import useSWR, { mutate } from 'swr';
+import { UAParser } from 'ua-parser-js';
 
 const messages = defineMessages({
   webpushsettingssaved: 'Web push notification settings saved successfully!',
   webpushsettingsfailed: 'Web push notification settings failed to save.',
   enablewebpush: 'Enable web push',
   disablewebpush: 'Disable web push',
+  managedevices: 'Manage devices',
+  type: 'type',
+  created: 'Created',
+  device: 'Device',
+  subscriptiondeleted: 'Subscription deleted.',
+  subscriptiondeleteerror:
+    'Something went wrong while deleting the user subscription.',
+  nodevicestoshow: 'You have no web push subscriptions to show.',
+  webpushhasbeenenabled: 'Web push has been enabled.',
+  webpushhasbeendisabled: 'Web push has been disabled.',
+  enablingwebpusherror: 'Something went wrong while enable web push.',
+  disablingwebpusherror: 'Something went wrong while disabling web push.',
 });
 
 const UserWebPushSettings = () => {
@@ -42,6 +60,15 @@ const UserWebPushSettings = () => {
   } = useSWR<UserSettingsNotificationsResponse>(
     user ? `/api/v1/user/${user?.id}/settings/notifications` : null
   );
+  const { data: dataDevices, mutate: revalidateDevices } = useSWR<
+    {
+      endpoint: string;
+      p256dh: string;
+      auth: string;
+      userAgent: string;
+      createdAt: Date;
+    }[]
+  >(`/api/v1/user/${user?.id}/pushSubscriptions`, { revalidateOnMount: true });
 
   // Subscribes to the push manager
   // Will only add to the database if subscribing for the first time
@@ -55,7 +82,6 @@ const UserWebPushSettings = () => {
               userVisibleOnly: true,
               applicationServerKey: currentSettings.vapidPublic,
             });
-
             const parsedSub = JSON.parse(JSON.stringify(sub));
 
             if (parsedSub.keys.p256dh && parsedSub.keys.auth) {
@@ -63,44 +89,74 @@ const UserWebPushSettings = () => {
                 endpoint: parsedSub.endpoint,
                 p256dh: parsedSub.keys.p256dh,
                 auth: parsedSub.keys.auth,
+                userAgent: navigator.userAgent,
               });
               setWebPushEnabled(true);
+              addToast(intl.formatMessage(messages.webpushhasbeenenabled), {
+                appearance: 'success',
+                autoDismiss: true,
+              });
             }
           }
         })
-        .catch(function (error) {
-          // eslint-disable-next-line no-console
-          console.log(
-            '[SW] Failure subscribing to push manager, error:',
-            error
-          );
+        .catch(function () {
+          addToast(intl.formatMessage(messages.enablingwebpusherror), {
+            autoDismiss: true,
+            appearance: 'error',
+          });
+        })
+        .finally(function () {
+          revalidateDevices();
         });
     }
   };
 
-  // Unsubscribes to the push manager
-  const disablePushNotifications = () => {
+  // Unsubscribes from the push manager
+  // Deletes/disables corresponding push subscription from database
+  const disablePushNotifications = async (p256dh?: string) => {
     if ('serviceWorker' in navigator && user?.id) {
       navigator.serviceWorker.getRegistration('/sw.js').then((registration) => {
         registration?.pushManager
           .getSubscription()
           .then(async (subscription) => {
-            subscription
-              ?.unsubscribe()
-              .then(async () => {
-                const parsedSub = JSON.parse(JSON.stringify(subscription));
-                await axios.delete(
-                  `/api/v1/user/${user.id}/pushSubscription/${parsedSub.keys.p256dh}`
-                );
-                setWebPushEnabled(false);
-              })
-              .catch(function (error) {
-                // eslint-disable-next-line no-console
-                console.log(
-                  '[SW] Failure unsubscribing to push manager, error:',
-                  error
-                );
-              });
+            const parsedSub = JSON.parse(JSON.stringify(subscription));
+
+            await axios.delete(
+              `/api/v1/user/${user?.id}/pushSubscription/${
+                p256dh ? p256dh : parsedSub.keys.p256dh
+              }`
+            );
+            if (subscription && (p256dh === parsedSub.keys.p256dh || !p256dh)) {
+              subscription.unsubscribe();
+              setWebPushEnabled(false);
+            }
+            addToast(
+              intl.formatMessage(
+                p256dh
+                  ? messages.subscriptiondeleted
+                  : messages.webpushhasbeendisabled
+              ),
+              {
+                autoDismiss: true,
+                appearance: 'success',
+              }
+            );
+          })
+          .catch(function () {
+            addToast(
+              intl.formatMessage(
+                p256dh
+                  ? messages.subscriptiondeleteerror
+                  : messages.disablingwebpusherror
+              ),
+              {
+                autoDismiss: true,
+                appearance: 'error',
+              }
+            );
+          })
+          .finally(function () {
+            revalidateDevices();
           });
       });
     }
@@ -127,10 +183,13 @@ const UserWebPushSettings = () => {
                   return;
                 }
                 setWebPushEnabled(true);
+              } else {
+                setWebPushEnabled(false);
               }
             });
         })
         .catch(function (error) {
+          setWebPushEnabled(false);
           // eslint-disable-next-line no-console
           console.log(
             '[SW] Failure retrieving push manager subscription, error:',
@@ -145,108 +204,180 @@ const UserWebPushSettings = () => {
   }
 
   return (
-    <Formik
-      initialValues={{
-        types: data?.notificationTypes.webpush ?? ALL_NOTIFICATIONS,
-      }}
-      enableReinitialize
-      onSubmit={async (values) => {
-        try {
-          await axios.post(`/api/v1/user/${user?.id}/settings/notifications`, {
-            pgpKey: data?.pgpKey,
-            discordId: data?.discordId,
-            pushbulletAccessToken: data?.pushbulletAccessToken,
-            pushoverApplicationToken: data?.pushoverApplicationToken,
-            pushoverUserKey: data?.pushoverUserKey,
-            telegramChatId: data?.telegramChatId,
-            telegramSendSilently: data?.telegramSendSilently,
-            notificationTypes: {
-              webpush: values.types,
-            },
-          });
-          mutate('/api/v1/settings/public');
-          addToast(intl.formatMessage(messages.webpushsettingssaved), {
-            appearance: 'success',
-            autoDismiss: true,
-          });
-        } catch (e) {
-          addToast(intl.formatMessage(messages.webpushsettingsfailed), {
-            appearance: 'error',
-            autoDismiss: true,
-          });
-        } finally {
-          revalidate();
-        }
-      }}
-    >
-      {({
-        errors,
-        touched,
-        isSubmitting,
-        isValid,
-        values,
-        setFieldValue,
-        setFieldTouched,
-      }) => {
-        return (
-          <Form className="section">
-            <NotificationTypeSelector
-              user={user}
-              currentTypes={values.types}
-              onUpdate={(newTypes) => {
-                setFieldValue('types', newTypes);
-                setFieldTouched('types');
-              }}
-              error={
-                errors.types && touched.types
-                  ? (errors.types as string)
-                  : undefined
+    <>
+      <Formik
+        initialValues={{
+          types: data?.notificationTypes.webpush ?? ALL_NOTIFICATIONS,
+        }}
+        enableReinitialize
+        onSubmit={async (values) => {
+          try {
+            await axios.post(
+              `/api/v1/user/${user?.id}/settings/notifications`,
+              {
+                pgpKey: data?.pgpKey,
+                discordId: data?.discordId,
+                pushbulletAccessToken: data?.pushbulletAccessToken,
+                pushoverApplicationToken: data?.pushoverApplicationToken,
+                pushoverUserKey: data?.pushoverUserKey,
+                telegramChatId: data?.telegramChatId,
+                telegramSendSilently: data?.telegramSendSilently,
+                notificationTypes: {
+                  webpush: values.types,
+                },
               }
-            />
-            <div className="actions">
-              <div className="flex justify-end">
-                <span className="ml-3 inline-flex rounded-md shadow-sm">
-                  <Button
-                    buttonType={`${webPushEnabled ? 'danger' : 'primary'}`}
-                    type="button"
-                    onClick={() =>
-                      webPushEnabled
-                        ? disablePushNotifications()
-                        : enablePushNotifications()
-                    }
-                  >
-                    {webPushEnabled ? (
-                      <CloudArrowDownIcon />
-                    ) : (
-                      <CloudArrowUpIcon />
-                    )}
-                    <span>
-                      {webPushEnabled
-                        ? intl.formatMessage(messages.disablewebpush)
-                        : intl.formatMessage(messages.enablewebpush)}
-                    </span>
-                  </Button>
-                </span>
-                <span className="ml-3 inline-flex rounded-md shadow-sm">
-                  <Button
-                    buttonType="primary"
-                    type="submit"
-                    disabled={isSubmitting || !isValid}
-                  >
-                    <ArrowDownOnSquareIcon />
-                    <span>
-                      {isSubmitting
-                        ? intl.formatMessage(globalMessages.saving)
-                        : intl.formatMessage(globalMessages.save)}
-                    </span>
-                  </Button>
-                </span>
+            );
+            mutate('/api/v1/settings/public');
+            addToast(intl.formatMessage(messages.webpushsettingssaved), {
+              appearance: 'success',
+              autoDismiss: true,
+            });
+          } catch (e) {
+            addToast(intl.formatMessage(messages.webpushsettingsfailed), {
+              appearance: 'error',
+              autoDismiss: true,
+            });
+          } finally {
+            revalidate();
+          }
+        }}
+      >
+        {({
+          errors,
+          touched,
+          isSubmitting,
+          isValid,
+          values,
+          setFieldValue,
+          setFieldTouched,
+        }) => {
+          return (
+            <Form className="section">
+              <NotificationTypeSelector
+                user={user}
+                currentTypes={values.types}
+                onUpdate={(newTypes) => {
+                  setFieldValue('types', newTypes);
+                  setFieldTouched('types');
+                }}
+                error={
+                  errors.types && touched.types
+                    ? (errors.types as string)
+                    : undefined
+                }
+              />
+              <div className="actions">
+                <div className="flex justify-end">
+                  <span className="ml-3 inline-flex rounded-md shadow-sm">
+                    <Button
+                      buttonType={`${webPushEnabled ? 'danger' : 'primary'}`}
+                      type="button"
+                      onClick={() =>
+                        webPushEnabled
+                          ? disablePushNotifications()
+                          : enablePushNotifications()
+                      }
+                    >
+                      {webPushEnabled ? (
+                        <CloudArrowDownIcon />
+                      ) : (
+                        <CloudArrowUpIcon />
+                      )}
+                      <span>
+                        {webPushEnabled
+                          ? intl.formatMessage(messages.disablewebpush)
+                          : intl.formatMessage(messages.enablewebpush)}
+                      </span>
+                    </Button>
+                  </span>
+                  <span className="ml-3 inline-flex rounded-md shadow-sm">
+                    <Button
+                      buttonType="primary"
+                      type="submit"
+                      disabled={isSubmitting || !isValid}
+                    >
+                      <ArrowDownOnSquareIcon />
+                      <span>
+                        {isSubmitting
+                          ? intl.formatMessage(globalMessages.saving)
+                          : intl.formatMessage(globalMessages.save)}
+                      </span>
+                    </Button>
+                  </span>
+                </div>
               </div>
-            </div>
-          </Form>
-        );
-      }}
-    </Formik>
+            </Form>
+          );
+        }}
+      </Formik>
+      <div className="mt-10 mb-6">
+        <h3 className="heading">
+          {intl.formatMessage(messages.managedevices)}
+        </h3>
+        {dataDevices?.length ? (
+          <Table>
+            <thead>
+              <tr>
+                <Table.TH>{intl.formatMessage(messages.type)}</Table.TH>
+                <Table.TH>{intl.formatMessage(messages.device)}</Table.TH>
+                <Table.TH>{intl.formatMessage(messages.created)}</Table.TH>
+                <Table.TH />
+              </tr>
+            </thead>
+            <Table.TBody>
+              {dataDevices?.map((device) => (
+                <tr
+                  key={`device-list-${device.p256dh}`}
+                  className="bg-gray-700"
+                >
+                  <Table.TD>
+                    <div className="flex items-center">
+                      <div className="h-8 w-8 flex-shrink-0">
+                        {UAParser(device.userAgent).device.type === 'mobile' ? (
+                          <DevicePhoneMobileIcon />
+                        ) : (
+                          <ComputerDesktopIcon />
+                        )}
+                      </div>
+                    </div>
+                  </Table.TD>
+                  <Table.TD>
+                    {device.userAgent
+                      ? UAParser(device.userAgent).device.model
+                      : 'Unknown'}
+                  </Table.TD>
+                  <Table.TD>
+                    {device.createdAt
+                      ? intl.formatDate(device.createdAt, {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        })
+                      : 'Unknown'}
+                  </Table.TD>
+                  <Table.TD alignText="right">
+                    <Button
+                      buttonType="danger"
+                      onClick={() => disablePushNotifications(device.p256dh)}
+                    >
+                      <TrashIcon />
+                    </Button>
+                  </Table.TD>
+                </tr>
+              ))}
+            </Table.TBody>
+          </Table>
+        ) : (
+          <>
+            <div className="mt-5" />
+            <Alert
+              title={intl.formatMessage(messages.nodevicestoshow)}
+              type="info"
+            />
+          </>
+        )}
+      </div>
+    </>
   );
 };
 
