@@ -147,23 +147,29 @@ mediaRoutes.post<
     }
 
     if (req.params.status === 'available') {
-      const request = await requestRepository.findOne({
+      const requests = await requestRepository.find({
         relations: {
           media: true,
         },
         where: { media: { id: media.id }, is4k: is4k },
       });
 
-      await requestRepository.update(
-        { media: { id: request?.id } },
-        { status: MediaRequestStatus.COMPLETED }
-      );
+      const requestIds = requests.map((request) => request.id);
 
-      request?.seasons.forEach(async (season) => {
-        await seasonRequestRepository.update(season.id, {
-          status: MediaRequestStatus.COMPLETED,
+      if (requestIds.length > 0) {
+        await requestRepository.update(
+          { id: In(requestIds) },
+          { status: MediaRequestStatus.COMPLETED }
+        );
+      }
+
+      requests
+        .flatMap((request) => request.seasons)
+        .forEach(async (season) => {
+          await seasonRequestRepository.update(season.id, {
+            status: MediaRequestStatus.COMPLETED,
+          });
         });
-      });
     }
 
     await mediaRepository.save(media);

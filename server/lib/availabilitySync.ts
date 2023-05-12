@@ -77,8 +77,14 @@ class AvailabilitySync {
             );
 
             await mediaRepository.update(media.id, {
-              status: MediaStatus.DELETED,
-              status4k: MediaStatus.DELETED,
+              status:
+                media.status !== MediaStatus.UNKNOWN
+                  ? MediaStatus.DELETED
+                  : MediaStatus.UNKNOWN,
+              status4k:
+                media.status4k !== MediaStatus.UNKNOWN
+                  ? MediaStatus.DELETED
+                  : MediaStatus.UNKNOWN,
               serviceId: null,
               serviceId4k: null,
               externalServiceId: null,
@@ -127,8 +133,14 @@ class AvailabilitySync {
               await seasonRepository.update(
                 { id: season.id },
                 {
-                  status: MediaStatus.DELETED,
-                  status4k: MediaStatus.DELETED,
+                  status:
+                    season.status !== MediaStatus.UNKNOWN
+                      ? MediaStatus.DELETED
+                      : MediaStatus.UNKNOWN,
+                  status4k:
+                    season.status4k !== MediaStatus.UNKNOWN
+                      ? MediaStatus.DELETED
+                      : MediaStatus.UNKNOWN,
                 }
               );
             } else {
@@ -149,8 +161,14 @@ class AvailabilitySync {
                   await seasonRepository.update(
                     { id: season.id },
                     {
-                      status: MediaStatus.DELETED,
-                      status4k: MediaStatus.DELETED,
+                      status:
+                        season.status !== MediaStatus.UNKNOWN
+                          ? MediaStatus.DELETED
+                          : MediaStatus.UNKNOWN,
+                      status4k:
+                        season.status4k !== MediaStatus.UNKNOWN
+                          ? MediaStatus.DELETED
+                          : MediaStatus.UNKNOWN,
                     }
                   );
                 }
@@ -243,7 +261,6 @@ class AvailabilitySync {
         where: whereOptions,
         skip: offset,
         take: pageSize,
-        order: { id: 'DESC' },
       }));
       offset += pageSize;
     } while (mediaPage.length > 0);
