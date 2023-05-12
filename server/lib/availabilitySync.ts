@@ -59,8 +59,10 @@ class AvailabilitySync {
         // We can not delete media so if both versions do not exist, we will change both columns to deleted or null
         if (!mediaExists) {
           if (
-            media.status !== MediaStatus.DELETED ||
-            media.status4k !== MediaStatus.DELETED
+            (media.status !== MediaStatus.DELETED ||
+              media.status4k !== MediaStatus.DELETED) &&
+            (media.status !== MediaStatus.UNKNOWN ||
+              media.status4k !== MediaStatus.UNKNOWN)
           ) {
             const request = await requestRepository.find({
               relations: {
@@ -87,8 +89,10 @@ class AvailabilitySync {
               ratingKey4k: null,
             });
 
+            const requestIds = request.map((request) => request.id);
+
             await requestRepository.update(
-              { id: In(request) },
+              { id: In(requestIds) },
               { status: MediaRequestStatus.COMPLETED }
             );
           }
@@ -116,7 +120,9 @@ class AvailabilitySync {
             if (
               !mediaExists &&
               (season.status !== MediaStatus.DELETED ||
-                season.status4k !== MediaStatus.DELETED)
+                season.status4k !== MediaStatus.DELETED) &&
+              (season.status !== MediaStatus.UNKNOWN ||
+                season.status4k !== MediaStatus.UNKNOWN)
             ) {
               await seasonRepository.update(
                 { id: season.id },
@@ -135,8 +141,10 @@ class AvailabilitySync {
                 );
 
                 if (
-                  season.status !== MediaStatus.DELETED ||
-                  season.status4k !== MediaStatus.DELETED
+                  (season.status !== MediaStatus.DELETED ||
+                    season.status4k !== MediaStatus.DELETED) &&
+                  (season.status !== MediaStatus.UNKNOWN ||
+                    season.status4k !== MediaStatus.UNKNOWN)
                 ) {
                   await seasonRepository.update(
                     { id: season.id },
@@ -235,6 +243,7 @@ class AvailabilitySync {
         where: whereOptions,
         skip: offset,
         take: pageSize,
+        order: { id: 'DESC' },
       }));
       offset += pageSize;
     } while (mediaPage.length > 0);
@@ -292,8 +301,12 @@ class AvailabilitySync {
             : { status: MediaStatus.DELETED }
         );
       }
-
-      await requestRepository.delete({ id: request?.id });
+      if (request?.status !== MediaRequestStatus.COMPLETED) {
+        await requestRepository.update(
+          { id: request?.id },
+          { status: MediaRequestStatus.COMPLETED }
+        );
+      }
     } catch (ex) {
       logger.debug(`Failure updating media ID ${media.id}`, {
         errorMessage: ex.message,
@@ -318,7 +331,6 @@ class AvailabilitySync {
       try {
         // Check if both exist or if a single non-4k or 4k exists
         // If both do not exist we will return false
-
         let meta: RadarrMovie | undefined;
 
         if (!server.is4k && media.externalServiceId) {
@@ -363,7 +375,10 @@ class AvailabilitySync {
       (existsInRadarr4k || existsInPlex4k) &&
       !existsInPlex
     ) {
-      if (media.status !== MediaStatus.DELETED) {
+      if (
+        media.status !== MediaStatus.DELETED &&
+        media.status !== MediaStatus.UNKNOWN
+      ) {
         this.mediaUpdater(media, false);
       }
     }
@@ -373,7 +388,10 @@ class AvailabilitySync {
       !existsInRadarr4k &&
       !existsInPlex4k
     ) {
-      if (media.status4k !== MediaStatus.DELETED) {
+      if (
+        media.status4k !== MediaStatus.DELETED &&
+        media.status4k !== MediaStatus.UNKNOWN
+      ) {
         this.mediaUpdater(media, true);
       }
     }
@@ -401,7 +419,6 @@ class AvailabilitySync {
       try {
         // Check if both exist or if a single non-4k or 4k exists
         // If both do not exist we will return false
-
         let meta: SonarrSeries | undefined;
 
         if (!server.is4k && media.externalServiceId) {
@@ -451,7 +468,10 @@ class AvailabilitySync {
       (existsInSonarr4k || existsInPlex4k) &&
       !existsInPlex
     ) {
-      if (media.status !== MediaStatus.DELETED) {
+      if (
+        media.status !== MediaStatus.DELETED &&
+        media.status !== MediaStatus.UNKNOWN
+      ) {
         this.mediaUpdater(media, false);
       }
     }
@@ -461,7 +481,10 @@ class AvailabilitySync {
       !existsInSonarr4k &&
       !existsInPlex4k
     ) {
-      if (media.status4k !== MediaStatus.DELETED) {
+      if (
+        media.status4k !== MediaStatus.DELETED &&
+        media.status4k !== MediaStatus.UNKNOWN
+      ) {
         this.mediaUpdater(media, true);
       }
     }
@@ -495,7 +518,6 @@ class AvailabilitySync {
       try {
         // Here we can use the cache we built when we fetched the series with mediaExistsInSonarr
         // If the cache does not have data, we will fetch with the api route
-
         let seasons: SonarrSeason[] =
           this.sonarrSeasonsCache[
             `${server.id}-${
@@ -580,7 +602,10 @@ class AvailabilitySync {
         (seasonExistsInSonarr4k || seasonExistsInPlex4k) &&
         !seasonExistsInPlex
       ) {
-        if (season.status !== MediaStatus.DELETED) {
+        if (
+          season.status !== MediaStatus.DELETED &&
+          season.status !== MediaStatus.UNKNOWN
+        ) {
           logger.info(
             `Season ${season.seasonNumber}, media ID ${media.id} does not exist in your non-4k Sonarr and Plex instance. Status will be changed to deleted.`,
             { label: 'AvailabilitySync' }
@@ -612,7 +637,10 @@ class AvailabilitySync {
         !seasonExistsInSonarr4k &&
         !seasonExistsInPlex4k
       ) {
-        if (season.status4k !== MediaStatus.DELETED) {
+        if (
+          season.status4k !== MediaStatus.DELETED &&
+          season.status4k !== MediaStatus.UNKNOWN
+        ) {
           logger.info(
             `Season ${season.seasonNumber}, media ID ${media.id} does not exist in your 4k Sonarr and Plex instance. Status will be changed to deleted.`,
             { label: 'AvailabilitySync' }
@@ -704,7 +732,7 @@ class AvailabilitySync {
       // If true, media exists in at least one radarr or plex instance.
       if (existsInRadarr) {
         logger.warn(
-          `${media.id} exists in at least one Radarr or Plex instance. Media will be updated if set to available.`,
+          `Media ID ${media.id} exists in at least one Radarr or Plex instance. Media will be updated if set to available.`,
           {
             label: 'AvailabilitySync',
           }
@@ -724,7 +752,7 @@ class AvailabilitySync {
       // If true, media exists in at least one sonarr or plex instance.
       if (existsInSonarr) {
         logger.warn(
-          `${media.id} exists in at least one Sonarr or Plex instance. Media will be updated if set to available.`,
+          `Media ID ${media.id} exists in at least one Sonarr or Plex instance. Media will be updated if set to available.`,
           {
             label: 'AvailabilitySync',
           }

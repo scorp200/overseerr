@@ -13,6 +13,7 @@ import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 import AsyncLock from '@server/utils/asyncLock';
 import { randomUUID } from 'crypto';
+import { In } from 'typeorm';
 
 // Default scan rates (can be overidden)
 const BUNDLE_SIZE = 20;
@@ -98,17 +99,25 @@ class BaseScanner<T> {
   private async requestUpdater(mediaId: number, is4k: boolean) {
     const requestRepository = getRepository(MediaRequest);
 
-    const request = await requestRepository.findOne({
+    const request = await requestRepository.find({
       relations: {
         media: true,
       },
-      where: { media: { id: mediaId }, is4k: is4k },
+      where: {
+        media: { id: mediaId },
+        is4k: is4k,
+        status: MediaRequestStatus.APPROVED,
+      },
     });
 
-    await requestRepository.update(
-      { id: request?.id },
-      { status: MediaRequestStatus.COMPLETED }
-    );
+    const requestIds = request.map((request) => request.id);
+
+    if (requestIds.length > 0) {
+      await requestRepository.update(
+        { id: In(requestIds) },
+        { status: MediaRequestStatus.COMPLETED }
+      );
+    }
   }
 
   private async seasonRequestUpdater(
@@ -369,7 +378,7 @@ class BaseScanner<T> {
               ? MediaStatus.PARTIALLY_AVAILABLE
               : season.is4kOverride &&
                 season.processing &&
-                existingSeason.status !== MediaStatus.DELETED
+                existingSeason.status4k !== MediaStatus.DELETED
               ? MediaStatus.PROCESSING
               : existingSeason.status4k;
 
@@ -516,7 +525,6 @@ class BaseScanner<T> {
               season.status4k !== MediaStatus.UNKNOWN &&
               season.status4k !== MediaStatus.DELETED
           ).length === 0;
-
         media.status =
           isAllStandardSeasons || shouldStayAvailable
             ? MediaStatus.AVAILABLE
@@ -553,11 +561,51 @@ class BaseScanner<T> {
             ? MediaStatus.DELETED
             : MediaStatus.UNKNOWN;
 
-        if (isAllStandardSeasons) {
+        const seasonsCompleted =
+          seasons.length &&
+          seasons.filter(
+            (season) =>
+              season.episodes === season.totalEpisodes && season.episodes > 0
+          ).length;
+
+        const seasonsCompleted4k =
+          seasons.length &&
+          seasons.filter(
+            (season) =>
+              season.episodes4k === season.totalEpisodes &&
+              season.episodes4k > 0
+          ).length;
+
+        const seasonRequestRepository = getRepository(SeasonRequest);
+
+        const seasonRequestsCompleted = await seasonRequestRepository.find({
+          relations: {
+            request: {
+              media: true,
+            },
+          },
+          where: {
+            request: {
+              is4k: is4k,
+              media: {
+                id: media.id,
+              },
+            },
+            status: MediaRequestStatus.COMPLETED,
+          },
+        });
+
+        if (
+          seasonsCompleted === seasonRequestsCompleted.length &&
+          seasonRequestsCompleted.length > 0
+        ) {
           this.requestUpdater(media.id, false);
         }
 
-        if (isAll4kSeasons) {
+        if (
+          seasonsCompleted4k === seasonRequestsCompleted.length &&
+          seasonRequestsCompleted.length > 0
+        ) {
           this.requestUpdater(media.id, true);
         }
         await mediaRepository.save(media);

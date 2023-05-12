@@ -244,9 +244,6 @@ const CollectionRequestModal = ({
     { type: 'or' }
   );
 
-  console.log('getALL', getAllRequestedParts().includes(8011));
-  console.log('getPART', getPartRequest(8011));
-
   return (
     <Modal
       loading={(!data && !error) || !quota}
