@@ -234,7 +234,8 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
       .filter(
         (request) =>
           request.is4k === is4k &&
-          request.status !== MediaRequestStatus.DECLINED
+          request.status !== MediaRequestStatus.DECLINED &&
+          request.status !== MediaRequestStatus.COMPLETED
       )
       .reduce((requestedSeasons, request) => {
         return [

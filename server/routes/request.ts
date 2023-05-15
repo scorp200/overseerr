@@ -400,7 +400,8 @@ requestRoutes.put<{ requestId: string }>(
             (r) =>
               r.is4k === request.is4k &&
               r.id !== request.id &&
-              r.status !== MediaRequestStatus.DECLINED
+              r.status !== MediaRequestStatus.DECLINED &&
+              r.status !== MediaRequestStatus.COMPLETED
           )
           .reduce((seasons, r) => {
             const combinedSeasons = r.seasons.map(
