@@ -1,10 +1,10 @@
 import Alert from '@app/components/Common/Alert';
 import Button from '@app/components/Common/Button';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
-import Table from '@app/components/Common/Table';
 import NotificationTypeSelector, {
   ALL_NOTIFICATIONS,
 } from '@app/components/NotificationTypeSelector';
+import DeviceItem from '@app/components/UserProfile/UserSettings/UserNotificationSettings/UserNotificationsWebPush/DeviceItem';
 import useSettings from '@app/hooks/useSettings';
 import { useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
@@ -12,9 +12,6 @@ import { ArrowDownOnSquareIcon } from '@heroicons/react/24/outline';
 import {
   CloudArrowDownIcon,
   CloudArrowUpIcon,
-  ComputerDesktopIcon,
-  DevicePhoneMobileIcon,
-  TrashIcon,
 } from '@heroicons/react/24/solid';
 import type { UserPushSubscription } from '@server/entity/UserPushSubscription';
 import type { UserSettingsNotificationsResponse } from '@server/interfaces/api/userSettingsInterfaces';
@@ -25,14 +22,13 @@ import { useEffect, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 import { useToasts } from 'react-toast-notifications';
 import useSWR, { mutate } from 'swr';
-import { UAParser } from 'ua-parser-js';
 
 const messages = defineMessages({
   webpushsettingssaved: 'Web push notification settings saved successfully!',
   webpushsettingsfailed: 'Web push notification settings failed to save.',
   enablewebpush: 'Enable web push',
   disablewebpush: 'Disable web push',
-  managedevices: 'Manage devices',
+  managedevices: 'Manage Devices',
   type: 'type',
   created: 'Created',
   device: 'Device',
@@ -314,68 +310,26 @@ const UserWebPushSettings = () => {
         <h3 className="heading">
           {intl.formatMessage(messages.managedevices)}
         </h3>
-        {dataDevices?.length ? (
-          <Table>
-            <thead>
-              <tr>
-                <Table.TH>{intl.formatMessage(messages.type)}</Table.TH>
-                <Table.TH>{intl.formatMessage(messages.device)}</Table.TH>
-                <Table.TH>{intl.formatMessage(messages.created)}</Table.TH>
-                <Table.TH />
-              </tr>
-            </thead>
-            <Table.TBody>
-              {dataDevices?.map((device) => (
-                <tr
-                  key={`device-list-${device.p256dh}`}
-                  className="bg-gray-700"
-                >
-                  <Table.TD>
-                    <div className="flex items-center">
-                      <div className="h-8 w-8 flex-shrink-0">
-                        {UAParser(device.userAgent).device.type === 'mobile' ? (
-                          <DevicePhoneMobileIcon />
-                        ) : (
-                          <ComputerDesktopIcon />
-                        )}
-                      </div>
-                    </div>
-                  </Table.TD>
-                  <Table.TD>
-                    {device.userAgent
-                      ? UAParser(device.userAgent).device.model
-                      : 'Unknown'}
-                  </Table.TD>
-                  <Table.TD>
-                    {device.createdAt
-                      ? intl.formatDate(device.createdAt, {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })
-                      : 'Unknown'}
-                  </Table.TD>
-                  <Table.TD alignText="right">
-                    <Button
-                      buttonType="danger"
-                      onClick={() => disablePushNotifications(device.p256dh)}
-                    >
-                      <TrashIcon />
-                    </Button>
-                  </Table.TD>
-                </tr>
-              ))}
-            </Table.TBody>
-          </Table>
-        ) : (
-          <>
-            <div className="mt-5" />
-            <Alert
-              title={intl.formatMessage(messages.nodevicestoshow)}
-              type="info"
-            />
-          </>
-        )}
+        <div className="section">
+          {dataDevices?.length ? (
+            dataDevices?.map((device, index) => (
+              <div className="py-2" key={`device-list-${index}`}>
+                <DeviceItem
+                  key={index}
+                  disablePushNotifications={disablePushNotifications}
+                  device={device}
+                />
+              </div>
+            ))
+          ) : (
+            <>
+              <Alert
+                title={intl.formatMessage(messages.nodevicestoshow)}
+                type="info"
+              />
+            </>
+          )}
+        </div>
       </div>
     </>
   );
