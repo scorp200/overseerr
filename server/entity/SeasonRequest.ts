@@ -38,22 +38,21 @@ class SeasonRequest {
   }
 
   @AfterUpdate()
-  public async handleRemoveParent(): Promise<void> {
-    const mediaRequestRepository = getRepository(MediaRequest);
-    const requestToBeDeleted = await mediaRequestRepository.findOneOrFail({
+  public async updateMediaRequests(): Promise<void> {
+    const requestRepository = getRepository(MediaRequest);
+
+    const relatedRequest = await requestRepository.findOne({
       where: { id: this.request.id },
     });
 
-    const allSeasonsAreCompleted = requestToBeDeleted.seasons.filter(
-      (season) => {
-        return season.status === MediaRequestStatus.COMPLETED;
-      }
+    const isRequestComplete = relatedRequest?.seasons.every(
+      (seasonRequest) => seasonRequest.status === MediaRequestStatus.COMPLETED
     );
 
-    if (requestToBeDeleted.seasons.length === allSeasonsAreCompleted.length) {
-      await mediaRequestRepository.update(this.request.id, {
-        status: MediaRequestStatus.COMPLETED,
-      });
+    if (isRequestComplete && relatedRequest) {
+      relatedRequest.status = MediaRequestStatus.COMPLETED;
+
+      requestRepository.save(relatedRequest);
     }
   }
 }

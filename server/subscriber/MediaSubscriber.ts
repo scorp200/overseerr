@@ -12,7 +12,7 @@ import notificationManager, { Notification } from '@server/lib/notifications';
 import logger from '@server/logger';
 import { truncate } from 'lodash';
 import type { EntitySubscriberInterface, UpdateEvent } from 'typeorm';
-import { EventSubscriber, In, Not } from 'typeorm';
+import { EventSubscriber, In } from 'typeorm';
 
 @EventSubscriber()
 export class MediaSubscriber implements EntitySubscriberInterface<Media> {
@@ -27,47 +27,39 @@ export class MediaSubscriber implements EntitySubscriberInterface<Media> {
     ) {
       if (entity.mediaType === MediaType.MOVIE) {
         const requestRepository = getRepository(MediaRequest);
-        const relatedRequests = await requestRepository.find({
+        const relatedRequest = await requestRepository.findOne({
           where: {
             media: {
               id: entity.id,
             },
             is4k,
-            status: Not(
-              MediaRequestStatus.DECLINED && MediaRequestStatus.COMPLETED
-            ),
+            status: MediaRequestStatus.COMPLETED,
           },
+          order: { id: 'DESC' },
         });
 
-        if (relatedRequests.length > 0) {
-          const tmdb = new TheMovieDb();
+        const tmdb = new TheMovieDb();
 
+        if (relatedRequest) {
           try {
             const movie = await tmdb.getMovie({ movieId: entity.tmdbId });
 
-            relatedRequests.forEach((request) => {
-              notificationManager.sendNotification(
-                Notification.MEDIA_AVAILABLE,
-                {
-                  event: `${is4k ? '4K ' : ''}Movie Request Now Available`,
-                  notifyAdmin: false,
-                  notifySystem: true,
-                  notifyUser: request.requestedBy,
-                  subject: `${movie.title}${
-                    movie.release_date
-                      ? ` (${movie.release_date.slice(0, 4)})`
-                      : ''
-                  }`,
-                  message: truncate(movie.overview, {
-                    length: 500,
-                    separator: /\s/,
-                    omission: '…',
-                  }),
-                  media: entity,
-                  image: `https://image.tmdb.org/t/p/w600_and_h900_bestv2${movie.poster_path}`,
-                  request,
-                }
-              );
+            notificationManager.sendNotification(Notification.MEDIA_AVAILABLE, {
+              event: `${is4k ? '4K ' : ''}Movie Request Now Available`,
+              notifyAdmin: false,
+              notifySystem: true,
+              notifyUser: relatedRequest.requestedBy,
+              subject: `${movie.title}${
+                movie.release_date ? ` (${movie.release_date.slice(0, 4)})` : ''
+              }`,
+              message: truncate(movie.overview, {
+                length: 500,
+                separator: /\s/,
+                omission: '…',
+              }),
+              media: entity,
+              image: `https://image.tmdb.org/t/p/w600_and_h900_bestv2${movie.poster_path}`,
+              request: relatedRequest,
             });
           } catch (e) {
             logger.error('Something went wrong sending media notification(s)', {
@@ -118,10 +110,9 @@ export class MediaSubscriber implements EntitySubscriberInterface<Media> {
               id: entity.id,
             },
             is4k,
-            status: Not(
-              MediaRequestStatus.DECLINED && MediaRequestStatus.COMPLETED
-            ),
+            status: MediaRequestStatus.COMPLETED,
           },
+          order: { id: 'DESC' },
         });
         const request = requests.find(
           (request) =>

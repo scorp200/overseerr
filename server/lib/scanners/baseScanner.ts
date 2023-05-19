@@ -1,19 +1,12 @@
 import TheMovieDb from '@server/api/themoviedb';
-import {
-  MediaRequestStatus,
-  MediaStatus,
-  MediaType,
-} from '@server/constants/media';
+import { MediaStatus, MediaType } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
-import MediaRequest from '@server/entity/MediaRequest';
 import Season from '@server/entity/Season';
-import SeasonRequest from '@server/entity/SeasonRequest';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 import AsyncLock from '@server/utils/asyncLock';
 import { randomUUID } from 'crypto';
-import { In } from 'typeorm';
 
 // Default scan rates (can be overidden)
 const BUNDLE_SIZE = 20;
@@ -96,61 +89,6 @@ class BaseScanner<T> {
     return existing;
   }
 
-  private async requestUpdater(mediaId: number, is4k: boolean) {
-    const requestRepository = getRepository(MediaRequest);
-
-    const request = await requestRepository.find({
-      relations: {
-        media: true,
-      },
-      where: {
-        media: { id: mediaId },
-        is4k: is4k,
-        status: MediaRequestStatus.APPROVED,
-      },
-    });
-
-    const requestIds = request.map((request) => request.id);
-
-    if (requestIds.length > 0) {
-      await requestRepository.update(
-        { id: In(requestIds) },
-        { status: MediaRequestStatus.COMPLETED }
-      );
-    }
-  }
-
-  private async seasonRequestUpdater(
-    mediaId: number | undefined,
-    seasonNumber: number,
-    is4k: boolean
-  ) {
-    const seasonRequestRepository = getRepository(SeasonRequest);
-
-    const seasonToBeCompleted = await seasonRequestRepository.findOne({
-      relations: {
-        request: {
-          media: true,
-        },
-      },
-      where: {
-        request: {
-          is4k: is4k,
-          media: {
-            id: mediaId,
-          },
-        },
-        seasonNumber: seasonNumber,
-      },
-    });
-
-    if (seasonToBeCompleted) {
-      await seasonRequestRepository.update(seasonToBeCompleted?.id, {
-        status: MediaRequestStatus.COMPLETED,
-      });
-    }
-  }
-
   protected async processMovie(
     tmdbId: number,
     {
@@ -224,14 +162,6 @@ class BaseScanner<T> {
         }
 
         if (changedExisting) {
-          if (existing.status === MediaStatus.AVAILABLE) {
-            this.requestUpdater(existing.id, false);
-          }
-
-          if (existing.status4k === MediaStatus.AVAILABLE) {
-            this.requestUpdater(existing.id, true);
-          }
-
           await mediaRepository.save(existing);
 
           this.log(
@@ -273,14 +203,6 @@ class BaseScanner<T> {
           newMedia.ratingKey = !is4k ? ratingKey : undefined;
           newMedia.ratingKey4k =
             is4k && this.enable4kMovie ? ratingKey : undefined;
-        }
-
-        if (newMedia['status'] === MediaStatus.AVAILABLE) {
-          this.requestUpdater(newMedia.id, false);
-        }
-
-        if (newMedia['status4k'] === MediaStatus.AVAILABLE && existing) {
-          this.requestUpdater(newMedia.id, true);
         }
 
         await mediaRepository.save(newMedia);
@@ -381,22 +303,6 @@ class BaseScanner<T> {
                 existingSeason.status4k !== MediaStatus.DELETED
               ? MediaStatus.PROCESSING
               : existingSeason.status4k;
-
-          if (
-            (season.totalEpisodes === season.episodes && season.episodes > 0) ||
-            existingSeason.status === MediaStatus.AVAILABLE
-          ) {
-            this.seasonRequestUpdater(media?.id, season.seasonNumber, false);
-          }
-
-          if (
-            (this.enable4kShow &&
-              season.episodes4k === season.totalEpisodes &&
-              season.episodes4k > 0) ||
-            existingSeason.status4k === MediaStatus.AVAILABLE
-          ) {
-            this.seasonRequestUpdater(media?.id, season.seasonNumber, true);
-          }
         } else {
           newSeasons.push(
             new Season({
@@ -421,18 +327,6 @@ class BaseScanner<T> {
                   : MediaStatus.UNKNOWN,
             })
           );
-
-          if (season.totalEpisodes === season.episodes && season.episodes > 0) {
-            this.seasonRequestUpdater(media?.id, season.seasonNumber, false);
-          }
-
-          if (
-            this.enable4kShow &&
-            season.totalEpisodes === season.episodes4k &&
-            season.episodes4k > 0
-          ) {
-            this.seasonRequestUpdater(media?.id, season.seasonNumber, true);
-          }
         }
       }
 
@@ -561,53 +455,6 @@ class BaseScanner<T> {
             ? MediaStatus.DELETED
             : MediaStatus.UNKNOWN;
 
-        const seasonsCompleted =
-          seasons.length &&
-          seasons.filter(
-            (season) =>
-              season.episodes === season.totalEpisodes && season.episodes > 0
-          ).length;
-
-        const seasonsCompleted4k =
-          seasons.length &&
-          seasons.filter(
-            (season) =>
-              season.episodes4k === season.totalEpisodes &&
-              season.episodes4k > 0
-          ).length;
-
-        const seasonRequestRepository = getRepository(SeasonRequest);
-
-        const seasonRequestsCompleted = await seasonRequestRepository.find({
-          relations: {
-            request: {
-              media: true,
-            },
-          },
-          where: {
-            request: {
-              is4k: is4k,
-              media: {
-                id: media.id,
-              },
-            },
-            status: MediaRequestStatus.COMPLETED,
-          },
-        });
-
-        if (
-          seasonsCompleted === seasonRequestsCompleted.length &&
-          seasonRequestsCompleted.length > 0
-        ) {
-          this.requestUpdater(media.id, false);
-        }
-
-        if (
-          seasonsCompleted4k === seasonRequestsCompleted.length &&
-          seasonRequestsCompleted.length > 0
-        ) {
-          this.requestUpdater(media.id, true);
-        }
         await mediaRepository.save(media);
 
         this.log(`Updating existing title: ${title}`);
@@ -670,13 +517,6 @@ class BaseScanner<T> {
               : MediaStatus.UNKNOWN,
         });
 
-        if (isAllStandardSeasons) {
-          this.requestUpdater(newMedia.id, false);
-        }
-
-        if (isAll4kSeasons && this.enable4kShow) {
-          this.requestUpdater(newMedia.id, true);
-        }
         await mediaRepository.save(newMedia);
 
         this.log(`Saved ${title}`);
