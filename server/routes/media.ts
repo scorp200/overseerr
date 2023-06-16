@@ -147,6 +147,9 @@ mediaRoutes.post<
     }
 
     if (req.params.status === 'available') {
+      // Here we check all related media requests and
+      // then set to completed if the media is marked
+      // as available
       const requests = await requestRepository.find({
         relations: {
           media: true,

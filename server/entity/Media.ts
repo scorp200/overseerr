@@ -329,6 +329,9 @@ class Media {
       },
     });
 
+    // Check the media entity status and if
+    // available or deleted, set the related request
+    // to completed
     if (relatedRequests.length > 0) {
       relatedRequests.forEach((request) => {
         if (

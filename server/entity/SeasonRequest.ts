@@ -45,6 +45,9 @@ class SeasonRequest {
       where: { id: this.request.id },
     });
 
+    // Check the parent of the season request and
+    // if every season request is complete
+    // set the parent request to complete as well
     const isRequestComplete = relatedRequest?.seasons.every(
       (seasonRequest) => seasonRequest.status === MediaRequestStatus.COMPLETED
     );

@@ -53,6 +53,8 @@ class Season {
       },
     });
 
+    // Check seasons when/if they become available or deleted,
+    // then set the related season request to completed
     relatedSeasonRequests.forEach((seasonRequest) => {
       if (
         this.seasonNumber === seasonRequest.seasonNumber &&

@@ -163,7 +163,6 @@ class BaseScanner<T> {
 
         if (changedExisting) {
           await mediaRepository.save(existing);
-
           this.log(
             `Media for ${title} exists. Changes were detected and the title will be updated.`,
             'info'
@@ -204,7 +203,6 @@ class BaseScanner<T> {
           newMedia.ratingKey4k =
             is4k && this.enable4kMovie ? ratingKey : undefined;
         }
-
         await mediaRepository.save(newMedia);
         this.log(`Saved new media: ${title}`);
       }
@@ -454,9 +452,7 @@ class BaseScanner<T> {
             : media.status4k === MediaStatus.DELETED
             ? MediaStatus.DELETED
             : MediaStatus.UNKNOWN;
-
         await mediaRepository.save(media);
-
         this.log(`Updating existing title: ${title}`);
       } else {
         const newMedia = new Media({
@@ -516,9 +512,7 @@ class BaseScanner<T> {
               ? MediaStatus.PROCESSING
               : MediaStatus.UNKNOWN,
         });
-
         await mediaRepository.save(newMedia);
-
         this.log(`Saved ${title}`);
       }
     });

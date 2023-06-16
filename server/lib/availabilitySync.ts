@@ -39,7 +39,6 @@ class AvailabilitySync {
       logger.info(`Starting availability sync...`, {
         label: 'AvailabilitySync',
       });
-
       const mediaRepository = getRepository(Media);
 
       const pageSize = 50;
@@ -427,7 +426,6 @@ class AvailabilitySync {
     let seasonExistsInSonarr4k = true;
 
     const mediaRepository = getRepository(Media);
-    // const seasonRepository = getRepository(Season);
 
     for (const server of this.sonarrServers) {
       const api = new SonarrAPI({
@@ -557,10 +555,13 @@ class AvailabilitySync {
       try {
         await mediaRepository.save(media);
       } catch (ex) {
-        logger.debug(`Failure updating media with TMDB ID ${media.tmdbId}`, {
-          errorMessage: ex.message,
-          label: 'AvailabilitySync',
-        });
+        logger.debug(
+          `Failure updating the seasons of media with TMDB ID ${media.tmdbId}`,
+          {
+            errorMessage: ex.message,
+            label: 'AvailabilitySync',
+          }
+        );
       }
     }
 
@@ -586,15 +587,15 @@ class AvailabilitySync {
     // Check each plex instance to see if media exists
     try {
       if (ratingKey) {
-        const meta = await this.plexClient?.getMetadata(ratingKey);
-        if (meta) {
+        const plex = await this.plexClient?.getMetadata(ratingKey);
+        if (plex) {
           existsInPlex = true;
         }
       }
 
       if (ratingKey4k) {
-        const meta4k = await this.plexClient?.getMetadata(ratingKey4k);
-        if (meta4k) {
+        const plex4k = await this.plexClient?.getMetadata(ratingKey4k);
+        if (plex4k) {
           existsInPlex4k = true;
         }
       }
@@ -625,7 +626,7 @@ class AvailabilitySync {
       // If true, media exists in at least one radarr or plex instance.
       if (existsInRadarr) {
         logger.warn(
-          `Media ID ${media.id} exists in at least one Radarr or Plex instance. Media will be updated if set to available.`,
+          `Media with TMDB ID ${media.tmdbId} exists in at least one Radarr or Plex instance. Media will be updated if set to available.`,
           {
             label: 'AvailabilitySync',
           }
@@ -645,7 +646,7 @@ class AvailabilitySync {
       // If true, media exists in at least one sonarr or plex instance.
       if (existsInSonarr) {
         logger.warn(
-          `Media ID ${media.id} exists in at least one Sonarr or Plex instance. Media will be updated if set to available.`,
+          `Media with TMDB ID ${media.tmdbId} exists in at least one Sonarr or Plex instance. Media will be updated if set to available.`,
           {
             label: 'AvailabilitySync',
           }
@@ -672,11 +673,11 @@ class AvailabilitySync {
           (await this.plexClient?.getChildrenMetadata(ratingKey)) ??
           [];
         this.plexSeasonsCache[ratingKey] = children;
-        const seasonMeta = children?.find(
+        const plexSeason = children?.find(
           (child) => child.index === season.seasonNumber
         );
 
-        if (seasonMeta) {
+        if (plexSeason) {
           seasonExistsInPlex = true;
         }
       }
@@ -686,11 +687,11 @@ class AvailabilitySync {
           (await this.plexClient?.getChildrenMetadata(ratingKey4k)) ??
           [];
         this.plexSeasonsCache[ratingKey4k] = children4k;
-        const seasonMeta4k = children4k?.find(
+        const plexSeason4k = children4k?.find(
           (child) => child.index === season.seasonNumber
         );
 
-        if (seasonMeta4k) {
+        if (plexSeason4k) {
           seasonExistsInPlex4k = true;
         }
       }
@@ -716,7 +717,7 @@ class AvailabilitySync {
 
     if (existsInSonarr) {
       logger.warn(
-        `Season ${season.seasonNumber}, media ID ${media.id} exists in at least one Sonarr or Plex instance. Media will be updated if set to available.`,
+        `Season ${season.seasonNumber}, media with TMDB ID ${media.tmdbId} exists in at least one Sonarr or Plex instance. Media will be updated if set to available.`,
         {
           label: 'AvailabilitySync',
         }
@@ -745,4 +746,5 @@ class AvailabilitySync {
 }
 
 const availabilitySync = new AvailabilitySync();
+
 export default availabilitySync;
