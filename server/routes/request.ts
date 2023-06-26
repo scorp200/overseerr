@@ -40,7 +40,6 @@ requestRoutes.get<Record<string, unknown>, RequestResultsResponse>(
       switch (req.query.filter) {
         case 'approved':
         case 'processing':
-        case 'available':
           statusFilter = [MediaRequestStatus.APPROVED];
           break;
         case 'pending':
@@ -56,6 +55,7 @@ requestRoutes.get<Record<string, unknown>, RequestResultsResponse>(
           statusFilter = [MediaRequestStatus.FAILED];
           break;
         case 'completed':
+        case 'available':
         case 'deleted':
           statusFilter = [MediaRequestStatus.COMPLETED];
           break;
